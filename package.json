@@ -1,12 +1,11 @@
 {
   "name": "aerune",
-  "version": "1.1.0",
+  "version": "1.0.0",
   "description": "Bluesky Client Aerune",
   "main": "main.js",
   "author": "garu neko",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder",
     "dist": "electron-builder"
   },
   "dependencies": {
@@ -17,39 +16,33 @@
     "electron-builder": "^24.13.3"
   },
   "build": {
+    "appId": "com.garuneko.aerune",
+    "productName": "Aerune",
+    "directories": {
+      "output": "dist"
+    },
     "publish": [
       {
         "provider": "github"
       }
     ],
-    "appId": "com.garuneko.aerune",
-    "productName": "Aerune",
-
-    "directories": {
-      "output": "dist"
-    },
-
     "mac": {
       "category": "public.app-category.utilities",
       "target": ["dmg", "zip"],
       "identity": null,
-      "type": "distribution",
       "hardenedRuntime": false,
       "gatekeeperAssess": false,
       "sign": false,
       "icon": "build/Aerunelogp.png"
     },
-
     "win": {
       "target": "nsis",
       "icon": "build/Aerunelogp.png"
     },
-
     "linux": {
       "target": "AppImage",
       "icon": "build/Aerunelogp.png"
     },
-
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
