@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - main
-    tags:
-      - "v*"
   workflow_dispatch:
 
 permissions:
@@ -35,7 +33,7 @@ jobs:
       - name: Build App
         run: npm run dist
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Artifacts (Actions)
         uses: actions/upload-artifact@v4
@@ -49,17 +47,3 @@ jobs:
             dist/latest*.yml
             dist/*.blockmap
           if-no-files-found: ignore
-
-      - name: Upload Assets to GitHub Release (tag only)
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            dist/*.exe
-            dist/*.dmg
-            dist/*.zip
-            dist/*.AppImage
-            dist/latest*.yml
-            dist/*.blockmap
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
