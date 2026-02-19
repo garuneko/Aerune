@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+    tags:
+      - "v*"
   workflow_dispatch:
 
 permissions:
@@ -27,26 +29,19 @@ jobs:
           node-version: 20
           cache: "npm"
 
-      - name: Install dependencies (prefer npm ci, fallback to npm install)
-        shell: bash
-        run: |
-          set -e
-          if [ ! -f package-lock.json ]; then
-            echo "package-lock.json not found -> using npm install"
-            npm install --no-audit --no-fund
-            exit 0
-          fi
+      # lock直せたら npm ci 推奨。直せてない間は npm install に戻す
+      - name: Install dependencies
+        run: npm ci
 
-          echo "Trying npm ci..."
-          if npm ci --no-audit --no-fund; then
-            echo "npm ci OK"
-          else
-            echo "npm ci failed (lockfile mismatch). Falling back to npm install..."
-            npm install --no-audit --no-fund
-          fi
+      # tag のときだけ Release に publish（Assets に載る）
+      # branch のときは publish しない（Artifacts のみ）
+      - name: Build (no publish on branch)
+        if: "!startsWith(github.ref, 'refs/tags/v')"
+        run: npx electron-builder --publish never
 
-      - name: Build App
-        run: npm run dist
+      - name: Build + Publish (on tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: npx electron-builder --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
