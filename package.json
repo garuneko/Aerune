@@ -34,15 +34,15 @@
       "hardenedRuntime": false,
       "gatekeeperAssess": false,
       "sign": false,
-      "icon": "build/Aerunelogo.icns"
+      "icon": "build/icon.icns"
     },
     "win": {
       "target": "nsis",
-      "icon": "build/Aerunelogo.ico"
+      "icon": "build/icon.ico"
     },
     "linux": {
       "target": "AppImage",
-      "icon": "build/Aerunelogo.png"
+      "icon": "build/icon.png"
     },
     "nsis": {
       "oneClick": false,
