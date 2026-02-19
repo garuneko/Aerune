@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@atproto/api": "^0.13.20"
-  },
+  
   "devDependencies": {
     "electron": "^34.0.0",
     "electron-builder": "^24.13.3"
@@ -33,11 +33,11 @@
       "hardenedRuntime": false,
       "gatekeeperAssess": false,
       "sign": false,
-      "icon": "build/Aerunelogp.png"
+      "icon": "build/Aerunelogp.icns"
     },
     "win": {
       "target": "nsis",
-      "icon": "build/Aerunelogp.png"
+      "icon": "build/Aerunelogp.ico"
     },
     "linux": {
       "target": "AppImage",
