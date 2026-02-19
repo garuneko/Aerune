@@ -22,6 +22,7 @@
     "directories": {
       "output": "dist"
     },
+
     "mac": {
       "category": "public.app-category.utilities",
       "target": ["dmg", "zip"],
@@ -29,14 +30,20 @@
       "type": "distribution",
       "hardenedRuntime": false,
       "gatekeeperAssess": false,
-      "sign": false
+      "sign": false,
+      "icon": "build/Aerunelogp.png"
     },
+
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "build/Aerunelogp.png"
     },
+
     "linux": {
-      "target": "AppImage"
+      "target": "AppImage",
+      "icon": "build/Aerunelogp.png"
     },
+
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
