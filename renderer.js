@@ -9,8 +9,13 @@ const translations = {
         reply_placeholder: "@{0} への返信", quote_placeholder: "@{0} を引用中...", login_failed: "ログインに失敗しました。", post_failed: "投稿に失敗しました。",
         delete_confirm: "このポストを削除しますか？", delete_failed: "削除に失敗しました。",
         follow_me: "フォローされています", following: "フォロー中", mutual: "相互フォロー", send_dm: "✉️ DMを送る",
-        chat_placeholder: "メッセージを入力...", notif_like: "があなたのポストをいいねしました", notif_repost: "があなたのポストをリポストしました",
-        search_btn: "検索", search_placeholder: "検索キーワードを入力...", reposted_by: "🔁 {0} がリポスト", logout_confirm: "現在のアカウントからログアウトしますか？"
+        chat_placeholder: "メッセージを入力...", 
+        // ★ 各種通知の翻訳を追加
+        notif_like: "があなたのポストをいいねしました", notif_repost: "があなたのポストをリポストしました",
+        notif_follow: "があなたをフォローしました", notif_mention: "があなたをメンションしました",
+        notif_reply: "があなたに返信しました", notif_quote: "があなたのポストを引用しました",
+        search_btn: "検索", search_placeholder: "検索キーワードを入力...", reposted_by: "🔁 {0} がリポスト", logout_confirm: "現在のアカウントからログアウトしますか？",
+        profile_reply: "＠ リプライ"
     },
     en: {
         nav_home: "Home", nav_notifications: "Notifications", nav_search: "Search", nav_profile: "Profile", nav_thread: "Thread", nav_chat: "Chat",
@@ -19,8 +24,13 @@ const translations = {
         reply_placeholder: "Reply to @{0}", quote_placeholder: "Quoting @{0}...", login_failed: "Login failed.", post_failed: "Post failed.", 
         delete_confirm: "Are you sure you want to delete this post?", delete_failed: "Failed to delete.",
         follow_me: "Follows you", following: "Following", mutual: "Mutual", send_dm: "✉️ Message",
-        chat_placeholder: "Type a message...", notif_like: "liked your post", notif_repost: "reposted your post",
-        search_btn: "Search", search_placeholder: "Enter keyword...", reposted_by: "🔁 Reposted by {0}", logout_confirm: "Are you sure you want to log out of the current account?"
+        chat_placeholder: "Type a message...", 
+        // ★ 各種通知の翻訳を追加
+        notif_like: "liked your post", notif_repost: "reposted your post",
+        notif_follow: "followed you", notif_mention: "mentioned you",
+        notif_reply: "replied to you", notif_quote: "quoted your post",
+        search_btn: "Search", search_placeholder: "Enter keyword...", reposted_by: "🔁 Reposted by {0}", logout_confirm: "Are you sure you want to log out of the current account?",
+        profile_reply: "@ Reply"
     }
 };
 
@@ -55,6 +65,10 @@ async function initApp() {
     els.dropZone = get('drop-zone');
     els.quotePreview = get('quote-preview');
     els.imagePreviewContainer = get('image-preview-container');
+
+    if (els.postInput) {
+        els.postInput.style.minHeight = '80px';
+    }
 
     applyTranslations();
 
@@ -140,6 +154,11 @@ function linkify(text) {
     escaped = escaped.replace(/(?:^|\s)(#[^\s#]+)/g, (match, tag) => {
         const space = match.startsWith(' ') ? ' ' : '';
         return `${space}<a href="#" onclick="window.execSearch('${tag.trim()}'); event.stopPropagation(); return false;" style="color: var(--bsky-blue); text-decoration: none;">${tag}</a>`;
+    });
+    escaped = escaped.replace(/(?:^|\s)(@[a-zA-Z0-9.-]+)/g, (match, handle) => {
+        const space = match.startsWith(' ') ? ' ' : '';
+        const cleanHandle = handle.trim().substring(1);
+        return `${space}<a href="#" onclick="window.loadProfile('${cleanHandle}'); event.stopPropagation(); return false;" style="color: var(--bsky-blue); text-decoration: none;">${handle.trim()}</a>`;
     });
     return escaped;
 }
@@ -303,7 +322,8 @@ window.prepareReply = (uri, cid, handle, rootUri, rootCid) => {
     resetPostForm();
     replyTarget = { uri, cid, root: { uri: rootUri || uri, cid: rootCid || cid } };
     els.postInput.placeholder = t('reply_placeholder', handle);
-    els.postInput.value = `@${handle} `; els.postInput.focus();
+    els.postInput.value = ''; 
+    els.postInput.focus();
 };
 
 window.prepareQuote = (uri, cid, handle, text) => {
@@ -311,6 +331,12 @@ window.prepareQuote = (uri, cid, handle, text) => {
     quoteTarget = { uri, cid };
     els.quotePreview.classList.remove('hidden');
     els.quotePreview.innerHTML = `<span class="quote-preview-close" onclick="resetPostForm()">×</span><strong>@${handle}</strong>: ${text.substring(0, 60)}...`;
+    els.postInput.focus();
+};
+
+window.prepareProfileReply = (handle) => {
+    resetPostForm();
+    els.postInput.value = `@${handle} `;
     els.postInput.focus();
 };
 
@@ -371,9 +397,14 @@ window.loadProfile = async (actor) => {
     try {
         const res = await agent.getProfile({ actor });
         const p = res.data;
-        const dmBtn = p.did !== agent.session.did ? `<button onclick="window.startDirectMessage('${p.did}')" class="sidebar-action-btn" style="width:auto; padding:5px 15px; margin-top:10px;">${t('send_dm')}</button>` : '';
+        const dmBtn = p.did !== agent.session.did ? `<button onclick="window.startDirectMessage('${p.did}')" class="sidebar-action-btn" style="width:auto; padding:5px 15px; margin-right:10px;">${t('send_dm')}</button>` : '';
+        const replyBtn = `<button onclick="window.prepareProfileReply('${p.handle}')" class="sidebar-action-btn" style="width:auto; padding:5px 15px;">${t('profile_reply')}</button>`;
+        
+        const actionBtns = p.did !== agent.session.did ? `<div style="margin-top:15px;">${dmBtn}${replyBtn}</div>` : '';
+        
         const rel = p.viewer?.following && p.viewer?.followedBy ? `<span class="relationship-badge">${t('mutual')}</span>` : (p.viewer?.following ? `<span class="relationship-badge">${t('following')}</span>` : (p.viewer?.followedBy ? `<span class="relationship-badge">${t('follow_me')}</span>` : ''));
-        container.innerHTML = `<img src="${p.banner || ''}" style="width:100%; height:150px; object-fit:cover;"><div style="padding:20px; position:relative;"><img src="${p.avatar || ''}" style="width:80px; height:80px; border-radius:50%; border:4px solid white; position:absolute; top:-40px;"><div style="margin-top:40px;"><div style="font-size:20px; font-weight:bold;">${p.displayName || p.handle}${rel}</div><div style="color:gray;">@${p.handle}</div><div style="margin-top:10px;">${p.description || ''}</div>${dmBtn}</div></div>`;
+        
+        container.innerHTML = `<img src="${p.banner || ''}" style="width:100%; height:150px; object-fit:cover;"><div style="padding:20px; position:relative;"><img src="${p.avatar || ''}" style="width:80px; height:80px; border-radius:50%; border:4px solid white; position:absolute; top:-40px;"><div style="margin-top:40px;"><div style="font-size:20px; font-weight:bold;">${p.displayName || p.handle}${rel}</div><div style="color:gray;">@${p.handle}</div><div style="margin-top:10px; word-break: break-word;">${linkify(p.description || '')}</div>${actionBtns}</div></div>`;
         const feed = await agent.getAuthorFeed({ actor, limit: 30 });
         renderPosts(feed.data.feed, document.getElementById('profile-timeline'));
     } catch (e) { container.innerHTML = 'Failed to load profile.'; }
@@ -408,8 +439,15 @@ async function loadConvo(convoId) {
         msgRes.data.messages.reverse().forEach(msg => {
             const isMine = msg.sender.did === agent.session.did;
             const bubble = document.createElement('div');
-            bubble.style.cssText = `margin:5px; padding:8px; border-radius:10px; align-self:${isMine ? 'flex-end' : 'flex-start'}; background:${isMine ? '#0085ff' : '#eee'}; color:${isMine ? 'white' : 'black'};`;
-            bubble.innerText = msg.text || ""; els.chatMessages.appendChild(bubble);
+            bubble.style.cssText = `margin:5px; padding:8px; border-radius:10px; align-self:${isMine ? 'flex-end' : 'flex-start'}; background:${isMine ? '#0085ff' : '#eee'}; color:${isMine ? 'white' : 'black'}; max-width: 80%; word-break: break-word;`;
+            
+            let msgHtml = linkify(msg.text || "");
+            if (isMine) {
+                msgHtml = msgHtml.replace(/color: var\(--bsky-blue\);/g, 'color: white; text-decoration: underline;');
+            }
+            bubble.innerHTML = msgHtml;
+            
+            els.chatMessages.appendChild(bubble);
         });
         els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
     } catch (e) {}
@@ -528,7 +566,6 @@ const sendChatMessage = async () => {
 
 document.getElementById('chat-send-btn')?.addEventListener('click', sendChatMessage);
 
-// ★ 修正：Cmd/Ctrl + Enter でDMを送信するように変更
 document.getElementById('chat-msg-input')?.addEventListener('keydown', (e) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
         e.preventDefault(); 
