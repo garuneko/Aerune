@@ -17,6 +17,7 @@
     "electron-builder": "^24.13.3"
   },
   "build": {
+    "publish": "github"
     "appId": "com.garuneko.aerune",
     "productName": "Aerune",
     "directories": {
