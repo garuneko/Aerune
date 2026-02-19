@@ -6,7 +6,7 @@
   "scripts": {
     "start": "electron .",
     "build": "electron-builder",
-    "dist": "electron-builder" 
+    "dist": "electron-builder"
   },
   "dependencies": {
     "@atproto/api": "^0.13.20"
@@ -18,20 +18,28 @@
   "build": {
     "appId": "com.garuneko.aerune",
     "productName": "Aerune",
-    "copyright": "Copyright © 2026 garuneko",
     "directories": {
       "output": "dist"
     },
+
+    "mac": {
+      "target": ["dmg", "zip"],
+      "identity": null,
+      "sign": false,
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "entitlements": null,
+      "entitlementsInherit": null
+    },
+
     "win": {
       "target": "nsis"
     },
-    "mac": {
-      "target": "dmg",
-      "identity": null
-    },
+
     "linux": {
       "target": "AppImage"
     },
+
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
