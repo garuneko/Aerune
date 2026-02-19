@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Bluesky Client Aerune",
   "main": "main.js",
+  "author": "Mitsuki Hamada",
   "scripts": {
     "start": "electron .",
     "build": "electron-builder",
@@ -21,7 +22,6 @@
     "directories": {
       "output": "dist"
     },
-
     "mac": {
       "target": ["dmg", "zip"],
       "identity": null,
@@ -31,15 +31,12 @@
       "entitlements": null,
       "entitlementsInherit": null
     },
-
     "win": {
       "target": "nsis"
     },
-
     "linux": {
       "target": "AppImage"
     },
-
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
