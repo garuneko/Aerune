@@ -23,14 +23,20 @@
       "output": "dist"
     },
     "mac": {
-      "target": ["dmg", "zip"],
-      "identity": null,
-      "sign": false,
-      "hardenedRuntime": false,
-      "gatekeeperAssess": false,
-      "entitlements": null,
-      "entitlementsInherit": null
-    },
+  "category": "public.app-category.utilities",
+  "target": ["dmg", "zip"],
+  "identity": null,
+  "type": "distribution",
+  "hardenedRuntime": false,
+  "gatekeeperAssess": false,
+  "sign": false
+},
+"win": {
+  "target": "nsis"
+},
+"linux": {
+  "target": "AppImage"
+}
     "win": {
       "target": "nsis"
     },
