@@ -10,7 +10,6 @@ const translations = {
         delete_confirm: "このポストを削除しますか？", delete_failed: "削除に失敗しました。",
         follow_me: "フォローされています", following: "フォロー中", mutual: "相互フォロー", send_dm: "✉️ DMを送る",
         chat_placeholder: "メッセージを入力...", notif_like: "があなたのポストをいいねしました", notif_repost: "があなたのポストをリポストしました",
-        // ★追加: 翻訳
         search_btn: "検索", search_placeholder: "検索キーワードを入力...", reposted_by: "🔁 {0} がリポスト", logout_confirm: "現在のアカウントからログアウトしますか？"
     },
     en: {
@@ -21,7 +20,6 @@ const translations = {
         delete_confirm: "Are you sure you want to delete this post?", delete_failed: "Failed to delete.",
         follow_me: "Follows you", following: "Following", mutual: "Mutual", send_dm: "✉️ Message",
         chat_placeholder: "Type a message...", notif_like: "liked your post", notif_repost: "reposted your post",
-        // ★追加: 翻訳
         search_btn: "Search", search_placeholder: "Enter keyword...", reposted_by: "🔁 Reposted by {0}", logout_confirm: "Are you sure you want to log out of the current account?"
     }
 };
@@ -37,9 +35,6 @@ const agent = new BskyAgent({ service: 'https://bsky.social' });
 let selectedImages = [], replyTarget = null, quoteTarget = null, savedAccounts = [], currentDid = null, currentConvoId = null;
 const els = {};
 
-// ------------------------------------------
-// 認証・初期化 (正常版を完全に維持)
-// ------------------------------------------
 async function initApp() {
     const get = (id) => document.getElementById(id);
     els.app = get('app');
@@ -138,9 +133,6 @@ function renderAccountList() {
     });
 }
 
-// ------------------------------------------
-// ★変更: リンク・ハッシュタグ処理
-// ------------------------------------------
 function linkify(text) {
     if (!text) return '';
     let escaped = text.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag]));
@@ -152,9 +144,6 @@ function linkify(text) {
     return escaped;
 }
 
-// ------------------------------------------
-// ★変更: ポスト表示 ＆ 引用・リポスト機能
-// ------------------------------------------
 function createPostElement(post, isThreadRoot = false, isQuoteModal = false, reason = null) {
     const author = post.author, viewer = post.viewer || {}, root = post.record?.reply?.root || { uri: post.uri, cid: post.cid };
     const div = document.createElement('div');
@@ -173,7 +162,6 @@ function createPostElement(post, isThreadRoot = false, isQuoteModal = false, rea
         else if (embed.$type === 'app.bsky.embed.record#view') {
             const rec = embed.record;
             if (rec.author) {
-                // 引用内の画像表示
                 let quoteMediaHtml = '';
                 if (rec.embeds && rec.embeds[0] && rec.embeds[0].$type === 'app.bsky.embed.images#view') {
                     quoteMediaHtml = `<div class="post-images" style="margin-top:8px;">` + rec.embeds[0].images.map(img => `<img src="${img.thumb}" class="post-img-thumb" onclick="window.openModal('${img.fullsize}'); event.stopPropagation();">`).join('') + `</div>`;
@@ -192,7 +180,6 @@ function createPostElement(post, isThreadRoot = false, isQuoteModal = false, rea
             }
             const rec = embed.record.record;
             if (rec && rec.author) {
-                // 引用内の画像表示
                 let quoteMediaHtml = '';
                 if (rec.embeds && rec.embeds[0] && rec.embeds[0].$type === 'app.bsky.embed.images#view') {
                     quoteMediaHtml = `<div class="post-images" style="margin-top:8px;">` + rec.embeds[0].images.map(img => `<img src="${img.thumb}" class="post-img-thumb" onclick="window.openModal('${img.fullsize}'); event.stopPropagation();">`).join('') + `</div>`;
@@ -207,7 +194,6 @@ function createPostElement(post, isThreadRoot = false, isQuoteModal = false, rea
         }
     }
 
-    // リポストされた投稿の明示
     let repostHtml = '';
     if (reason && reason.$type === 'app.bsky.feed.defs#reasonRepost') {
         const reposterName = reason.by.displayName || reason.by.handle;
@@ -241,9 +227,6 @@ window.openQuoteModal = (e, quoteRecord) => {
 };
 document.getElementById('quote-modal-close')?.addEventListener('click', () => document.getElementById('quote-modal').classList.add('hidden'));
 
-// ------------------------------------------
-// 投稿・削除・画像
-// ------------------------------------------
 async function sendPost() {
     const text = els.postInput.value.trim();
     if (!text && selectedImages.length === 0 && !quoteTarget) return;
@@ -331,19 +314,16 @@ window.prepareQuote = (uri, cid, handle, text) => {
     els.postInput.focus();
 };
 
-// ------------------------------------------
-// 通知・タイムライン
-// ------------------------------------------
 async function checkNotifs() {
     try { const res = await agent.countUnreadNotifications(); els.notifBadge.classList.toggle('hidden', res.data.count === 0); } catch(e) {}
 }
 
-// ★変更: renderPosts で reason を渡す
 function renderPosts(posts, container) { 
     if (!container) return; 
     container.innerHTML = ''; 
     posts.forEach(item => container.appendChild(createPostElement(item.post || item, false, false, item.reason))); 
 }
+
 async function fetchTimeline() { try { const res = await agent.getTimeline({ limit: 30 }); renderPosts(res.data.feed, els.timelineDiv); } catch (e) {} }
 
 async function fetchNotifications() {
@@ -413,7 +393,6 @@ async function fetchConvos() {
     } catch (e) {}
 }
 
-// ★変更: 新規DM時に相手プロフィールを表示
 async function loadConvo(convoId) {
     currentConvoId = convoId; els.chatInputArea.classList.remove('hidden');
     try {
@@ -454,6 +433,12 @@ function switchView(viewId, activeDiv) {
     if(activeDiv) activeDiv.classList.remove('hidden');
     document.querySelectorAll('.nav-links li').forEach(li => li.classList.remove('active'));
     document.getElementById(`nav-${viewId}`)?.classList.add('active');
+
+    if (els.dropZone) {
+        els.dropZone.style.display = (viewId === 'chat') ? 'none' : '';
+    } else if (els.postInput && els.postInput.parentElement) {
+        els.postInput.parentElement.style.display = (viewId === 'chat') ? 'none' : '';
+    }
 }
 
 function applyTranslations() {
@@ -462,7 +447,7 @@ function applyTranslations() {
 }
 
 // ------------------------------------------
-// イベントリスナー (ここから先は既存の維持＋追加のみ)
+// イベントリスナー
 // ------------------------------------------
 document.getElementById('login-btn').addEventListener('click', login);
 document.getElementById('post-btn')?.addEventListener('click', sendPost);
@@ -471,27 +456,6 @@ document.getElementById('nav-notifications').addEventListener('click', () => { s
 document.getElementById('nav-chat').addEventListener('click', () => { switchView('chat', els.chatView); fetchConvos(); });
 document.getElementById('nav-profile').addEventListener('click', () => { window.loadProfile(agent.session.did); });
 
-document.getElementById('chat-send-btn')?.addEventListener('click', async () => {
-    const input = document.getElementById('chat-msg-input'); if (!input.value.trim() || !currentConvoId) return;
-    await getChatAgent().chat.bsky.convo.sendMessage({ convoId: currentConvoId, message: { text: input.value.trim() } });
-    input.value = ''; loadConvo(currentConvoId);
-});
-
-window.addEventListener('keydown', (e) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && document.activeElement === els.postInput) { e.preventDefault(); sendPost(); }
-    if (e.key === 'Escape') { 
-        resetPostForm(); 
-        document.getElementById('quote-modal')?.classList.add('hidden'); 
-        document.getElementById('image-modal')?.classList.add('hidden'); 
-    }
-});
-
-window.doLike = async (uri, cid, likeUri) => { try { if (likeUri) await agent.deleteLike(likeUri); else await agent.like(uri, cid); fetchTimeline(); } catch(e){} };
-window.doRepost = async (uri, cid, repostUri) => { try { if (repostUri) await agent.deleteRepost(repostUri); else await agent.repost(uri, cid); fetchTimeline(); } catch(e){} };
-window.openModal = (url) => { document.getElementById('modal-image').src = url; document.getElementById('image-modal').classList.remove('hidden'); };
-document.getElementById('image-input')?.addEventListener('change', (e) => { selectedImages = [...selectedImages, ...Array.from(e.target.files)].slice(0, 4); updateImagePreview(); });
-
-// ★追加: 各種ボタン処理 (検索・更新・ログアウト・画像モーダル閉じる)
 window.execSearch = async (q) => {
     const query = typeof q === 'string' ? q : document.getElementById('search-input')?.value.trim();
     if (!query) return;
@@ -533,5 +497,43 @@ document.getElementById('logout-btn')?.addEventListener('click', async () => {
 
 document.getElementById('modal-close')?.addEventListener('click', () => { document.getElementById('image-modal')?.classList.add('hidden'); });
 document.getElementById('image-modal')?.addEventListener('click', (e) => { if (e.target.id === 'image-modal') document.getElementById('image-modal').classList.add('hidden'); });
+
+window.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && document.activeElement === els.postInput) { e.preventDefault(); sendPost(); }
+    if (e.key === 'Escape') { 
+        resetPostForm(); 
+        document.getElementById('quote-modal')?.classList.add('hidden'); 
+        document.getElementById('image-modal')?.classList.add('hidden'); 
+    }
+});
+
+window.doLike = async (uri, cid, likeUri) => { try { if (likeUri) await agent.deleteLike(likeUri); else await agent.like(uri, cid); fetchTimeline(); } catch(e){} };
+window.doRepost = async (uri, cid, repostUri) => { try { if (repostUri) await agent.deleteRepost(repostUri); else await agent.repost(uri, cid); fetchTimeline(); } catch(e){} };
+window.openModal = (url) => { document.getElementById('modal-image').src = url; document.getElementById('image-modal').classList.remove('hidden'); };
+document.getElementById('image-input')?.addEventListener('change', (e) => { selectedImages = [...selectedImages, ...Array.from(e.target.files)].slice(0, 4); updateImagePreview(); });
+
+const sendChatMessage = async () => {
+    const input = document.getElementById('chat-msg-input'); 
+    if (!input || !input.value.trim() || !currentConvoId) return;
+    const text = input.value.trim();
+    input.value = ''; 
+    try {
+        await getChatAgent().chat.bsky.convo.sendMessage({ convoId: currentConvoId, message: { text } });
+        loadConvo(currentConvoId);
+    } catch (e) {
+        alert("DMの送信に失敗しました。");
+        input.value = text; 
+    }
+};
+
+document.getElementById('chat-send-btn')?.addEventListener('click', sendChatMessage);
+
+// ★ 修正：Cmd/Ctrl + Enter でDMを送信するように変更
+document.getElementById('chat-msg-input')?.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        e.preventDefault(); 
+        sendChatMessage();
+    }
+});
 
 initApp();
