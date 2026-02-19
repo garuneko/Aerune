@@ -1,0 +1,37 @@
+{
+  "name": "aerune",
+  "version": "1.0.0",
+  "description": "Bluesky Client Aerune",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder"
+  },
+  "dependencies": {
+    "@atproto/api": "^0.13.20"
+  },
+  "devDependencies": {
+    "electron": "^34.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.garuneko.aerune",
+    "productName": "Aerune",
+    "copyright": "Copyright © 2026 Mitsuki Hamada",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "Aerunelogp.png"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "Aerunelogp.png"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "Aerunelogp.png"
+    }
+  }
+}

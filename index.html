@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Aerune</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app" style="transition: opacity 0.3s;">
+        <nav class="sidebar">
+            <div class="logo-area"><img src="Aerunelogp.png" class="app-logo"></div>
+            <div id="profile-snippet"></div>
+            <div id="account-list" class="account-list"></div>
+            <ul class="nav-links" style="margin-top: 20px;">
+                <li id="nav-home" class="active" data-i18n="nav_home">ホーム</li>
+                <li id="nav-notifications" style="position: relative;">
+                    <span data-i18n="nav_notifications">通知</span>
+                    <span id="notif-badge" class="notif-badge hidden"></span>
+                </li>
+                <li id="nav-chat" data-i18n="nav_chat">チャット</li>
+                <li id="nav-search" data-i18n="nav_search">検索</li>
+                <li id="nav-profile" data-i18n="nav_profile">プロフィール</li>
+            </ul>
+            <div style="margin-top: auto;">
+                <button id="add-account-btn" class="sidebar-action-btn" data-i18n="add_account">＋ アカウント追加</button>
+                <button id="logout-btn" class="sidebar-action-btn logout-btn" data-i18n="logout">ログアウト</button>
+            </div>
+        </nav>
+
+        <main class="content">
+            <header class="content-header">
+                <h2 id="view-title" data-i18n="nav_home">Home</h2>
+                <button id="refresh-btn" class="icon-btn">🔄</button>
+            </header>
+            <div id="timeline"></div>
+            <div id="notifications" class="hidden"></div>
+            <div id="chat-view" class="hidden">
+                <div class="chat-container">
+                    <div id="convo-list" class="convo-list"></div>
+                    <div class="chat-main">
+                        <div id="chat-header" class="chat-header"></div>
+                        <div id="chat-messages" class="chat-messages"></div>
+                        <div id="chat-input-area" class="chat-input-area hidden">
+                            <input type="text" id="chat-msg-input" data-i18n-placeholder="chat_placeholder">
+                            <button id="chat-send-btn" data-i18n="send">送信</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div id="search-view" class="hidden">
+                <div class="search-bar">
+                    <input type="text" id="search-input" data-i18n-placeholder="search_placeholder"><button id="search-exec-btn" data-i18n="search_btn">検索</button>
+                </div>
+                <div id="search-results"></div>
+            </div>
+            <div id="profile-view" class="hidden"><div id="profile-header-container"></div><div id="profile-timeline"></div></div>
+            <div id="thread-view" class="hidden"><div id="thread-content"></div></div>
+            <div class="post-form-container" id="drop-zone">
+                <div id="quote-preview" class="quote-preview hidden"></div>
+                <div class="post-form-inner">
+                    <label for="image-input" class="image-label">📷</label>
+                    <input type="file" id="image-input" accept="image/*" multiple style="display:none;">
+                    <textarea id="post-input" data-i18n-placeholder="post_placeholder" rows="1"></textarea>
+                    <button id="post-btn" data-i18n="send">送信</button>
+                </div>
+                <div id="image-preview-container"></div>
+            </div>
+        </main>
+    </div>
+    <div id="login-form" class="hidden">
+        <div class="login-box">
+            <img src="Aerunelogp.png" style="width: 80px; margin: 0 auto 10px; display: block; border-radius: 12px;">
+            <h2 style="text-align: center;" data-i18n="login_title">ログイン</h2>
+            <input type="text" id="id" data-i18n-placeholder="login_id"><input type="password" id="pw" data-i18n-placeholder="login_pw">
+            <button id="login-btn" data-i18n="login_btn">ログイン</button>
+        </div>
+    </div>
+    <div id="image-modal" class="hidden"><span id="modal-close">&times;</span><img id="modal-image" src=""></div>
+    <div id="quote-modal" class="hidden"><div class="modal-content"><span id="quote-modal-close" class="modal-close-btn">&times;</span><div id="quote-modal-body"></div></div></div>
+    <script src="renderer.js"></script>
+</body>
+</html>
