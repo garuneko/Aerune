@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@atproto/api": "^0.13.20"
-  
+  },
   "devDependencies": {
     "electron": "^34.0.0",
     "electron-builder": "^24.13.3"
@@ -19,7 +19,8 @@
     "appId": "com.garuneko.aerune",
     "productName": "Aerune",
     "directories": {
-      "output": "dist"
+      "output": "dist",
+      "buildResources": "build"
     },
     "publish": [
       {
@@ -33,15 +34,15 @@
       "hardenedRuntime": false,
       "gatekeeperAssess": false,
       "sign": false,
-      "icon": "build/Aerunelogp.icns"
+      "icon": "build/Aerunelogo.icns"
     },
     "win": {
       "target": "nsis",
-      "icon": "build/Aerunelogp.ico"
+      "icon": "build/Aerunelogo.ico"
     },
     "linux": {
       "target": "AppImage",
-      "icon": "build/Aerunelogp.png"
+      "icon": "build/Aerunelogo.png"
     },
     "nsis": {
       "oneClick": false,
