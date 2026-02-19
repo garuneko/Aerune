@@ -10,7 +10,6 @@ const translations = {
         delete_confirm: "このポストを削除しますか？", delete_failed: "削除に失敗しました。",
         follow_me: "フォローされています", following: "フォロー中", mutual: "相互フォロー", send_dm: "✉️ DMを送る",
         chat_placeholder: "メッセージを入力...", 
-        // ★ 各種通知の翻訳を追加
         notif_like: "があなたのポストをいいねしました", notif_repost: "があなたのポストをリポストしました",
         notif_follow: "があなたをフォローしました", notif_mention: "があなたをメンションしました",
         notif_reply: "があなたに返信しました", notif_quote: "があなたのポストを引用しました",
@@ -25,7 +24,6 @@ const translations = {
         delete_confirm: "Are you sure you want to delete this post?", delete_failed: "Failed to delete.",
         follow_me: "Follows you", following: "Following", mutual: "Mutual", send_dm: "✉️ Message",
         chat_placeholder: "Type a message...", 
-        // ★ 各種通知の翻訳を追加
         notif_like: "liked your post", notif_repost: "reposted your post",
         notif_follow: "followed you", notif_mention: "mentioned you",
         notif_reply: "replied to you", notif_quote: "quoted your post",
@@ -44,6 +42,38 @@ const t = (key, ...args) => {
 const agent = new BskyAgent({ service: 'https://bsky.social' });
 let selectedImages = [], replyTarget = null, quoteTarget = null, savedAccounts = [], currentDid = null, currentConvoId = null;
 const els = {};
+
+// ★ 履歴管理用の変数
+let historyStack = [];
+let currentState = null;
+
+function pushState(newState) {
+    if (currentState && JSON.stringify(currentState) !== JSON.stringify(newState)) {
+        historyStack.push(currentState);
+    }
+    currentState = newState;
+    updateBackBtn();
+}
+
+function updateBackBtn() {
+    const backBtn = document.getElementById('back-btn');
+    if (backBtn) backBtn.style.display = historyStack.length > 0 ? 'inline-block' : 'none';
+}
+
+function goBack() {
+    if (historyStack.length > 0) {
+        const prevState = historyStack.pop();
+        currentState = prevState;
+        updateBackBtn();
+        
+        if (prevState.type === 'home') { switchView('home', els.timelineDiv); fetchTimeline(); }
+        else if (prevState.type === 'notifications') { switchView('notifications', els.notifDiv); fetchNotifications(); }
+        else if (prevState.type === 'chat') { switchView('chat', els.chatView); fetchConvos(); }
+        else if (prevState.type === 'search') { switchView('search', els.searchView); }
+        else if (prevState.type === 'profile') { window.loadProfile(prevState.actor, true); }
+        else if (prevState.type === 'thread') { window.loadThread(prevState.uri, true); }
+    }
+}
 
 async function initApp() {
     const get = (id) => document.getElementById(id);
@@ -65,6 +95,18 @@ async function initApp() {
     els.dropZone = get('drop-zone');
     els.quotePreview = get('quote-preview');
     els.imagePreviewContainer = get('image-preview-container');
+
+    // ★ ヘッダーに戻るボタンを動的に追加
+    if (els.viewTitle && !document.getElementById('back-btn')) {
+        const backBtn = document.createElement('button');
+        backBtn.id = 'back-btn';
+        backBtn.className = 'icon-btn';
+        backBtn.innerText = '◀';
+        backBtn.style.display = 'none';
+        backBtn.style.marginRight = '10px';
+        backBtn.onclick = goBack;
+        els.viewTitle.parentNode.insertBefore(backBtn, els.viewTitle);
+    }
 
     if (els.postInput) {
         els.postInput.style.minHeight = '80px';
@@ -129,6 +171,8 @@ function setupLoggedInUI() {
         document.getElementById('profile-snippet').innerHTML = `<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;"><img src="${res.data.avatar}" style="width: 40px; height: 40px; border-radius: 50%;"><strong>${res.data.displayName || res.data.handle}</strong></div>`;
         renderAccountList();
     });
+    // ★ 起動時にホームの履歴を積む
+    pushState({ type: 'home' });
     switchView('home', els.timelineDiv);
     fetchTimeline();
     setInterval(checkNotifs, 30000);
@@ -169,7 +213,13 @@ function createPostElement(post, isThreadRoot = false, isQuoteModal = false, rea
     div.className = 'post';
     if (isThreadRoot) div.style.borderLeft = '4px solid var(--bsky-blue)';
     
-    if (!isQuoteModal) div.onclick = () => window.loadThread(post.uri);
+    // ★ コピペ対策: テキスト選択中は遷移しない
+    if (!isQuoteModal) {
+        div.onclick = () => {
+            if (window.getSelection().toString().length > 0) return;
+            window.loadThread(post.uri);
+        };
+    }
 
     let embedHtml = '';
     const embed = post.embed;
@@ -362,16 +412,33 @@ async function fetchNotifications() {
         els.notifDiv.innerHTML = '';
         notifications.forEach(n => {
             const div = document.createElement('div'); div.className = 'post';
-            if (n.reasonSubject || n.uri) div.onclick = () => window.loadThread(n.reasonSubject || n.uri);
-            const preview = postMap[n.reasonSubject] ? `<div class="post-text" style="color:gray; font-size:0.85em; margin-top:4px; padding:4px 8px; border-left:2px solid #ddd;">${linkify(postMap[n.reasonSubject])}</div>` : '';
-            div.innerHTML = `<img src="${n.author.avatar || ''}" class="post-avatar"> <div class="post-content"><strong>${n.author.displayName}</strong> <span>${t('notif_' + n.reason)}</span>${preview}</div>`;
+            // ★ コピペ対策
+            if (n.reasonSubject || n.uri) {
+                div.onclick = () => {
+                    if (window.getSelection().toString().length > 0) return;
+                    window.loadThread(n.reasonSubject || n.uri);
+                };
+            }
+            
+            // ★ 返信などの場合は相手のテキストを表示する
+            let previewText = '';
+            if (n.reason === 'like' || n.reason === 'repost') {
+                previewText = postMap[n.reasonSubject] || '';
+            } else if (n.reason === 'reply' || n.reason === 'quote' || n.reason === 'mention') {
+                previewText = n.record?.text || '';
+            }
+            
+            const preview = previewText ? `<div class="post-text" style="color:gray; font-size:0.85em; margin-top:4px; padding:4px 8px; border-left:2px solid #ddd;">${linkify(previewText)}</div>` : '';
+            div.innerHTML = `<img src="${n.author.avatar || ''}" class="post-avatar"> <div class="post-content"><strong>${n.author.displayName || n.author.handle}</strong> <span>${t('notif_' + n.reason)}</span>${preview}</div>`;
             els.notifDiv.appendChild(div);
         });
         await agent.updateSeenNotifications(); checkNotifs();
     } catch (e) {}
 }
 
-window.loadThread = async (uri) => {
+// ★ isBackフラグを追加して履歴が二重に積まれないようにする
+window.loadThread = async (uri, isBack = false) => {
+    if (!isBack) pushState({ type: 'thread', uri });
     switchView('thread', els.threadView);
     const container = document.getElementById('thread-content');
     container.innerHTML = '<div style="padding:20px;text-align:center;">Loading Thread...</div>';
@@ -390,7 +457,8 @@ window.loadThread = async (uri) => {
     } catch (e) { container.innerHTML = '<div style="padding:20px;">Failed to load thread.</div>'; }
 };
 
-window.loadProfile = async (actor) => {
+window.loadProfile = async (actor, isBack = false) => {
+    if (!isBack) pushState({ type: 'profile', actor });
     switchView('profile', els.profileView);
     const container = document.getElementById('profile-header-container');
     container.innerHTML = 'Loading...';
@@ -455,6 +523,7 @@ async function loadConvo(convoId) {
 
 window.startDirectMessage = async (did) => {
     try { 
+        pushState({ type: 'chat' }); // DM画面への移動履歴
         switchView('chat', els.chatView); 
         const profile = await agent.getProfile({ actor: did });
         els.chatHeader.innerHTML = `<img src="${profile.data.avatar || ''}" style="width:30px;height:30px;border-radius:50%;vertical-align:middle;margin-right:10px;"> <strong>${profile.data.displayName || profile.data.handle}</strong>`;
@@ -485,20 +554,33 @@ function applyTranslations() {
 }
 
 // ------------------------------------------
-// イベントリスナー
+// イベントリスナー (タブクリック時にも履歴を積む)
 // ------------------------------------------
 document.getElementById('login-btn').addEventListener('click', login);
 document.getElementById('post-btn')?.addEventListener('click', sendPost);
-document.getElementById('nav-home').addEventListener('click', () => { switchView('home', els.timelineDiv); fetchTimeline(); });
-document.getElementById('nav-notifications').addEventListener('click', () => { switchView('notifications', els.notifDiv); fetchNotifications(); });
-document.getElementById('nav-chat').addEventListener('click', () => { switchView('chat', els.chatView); fetchConvos(); });
-document.getElementById('nav-profile').addEventListener('click', () => { window.loadProfile(agent.session.did); });
+
+document.getElementById('nav-home').addEventListener('click', () => { 
+    pushState({ type: 'home' }); switchView('home', els.timelineDiv); fetchTimeline(); 
+});
+document.getElementById('nav-notifications').addEventListener('click', () => { 
+    pushState({ type: 'notifications' }); switchView('notifications', els.notifDiv); fetchNotifications(); 
+});
+document.getElementById('nav-chat').addEventListener('click', () => { 
+    pushState({ type: 'chat' }); switchView('chat', els.chatView); fetchConvos(); 
+});
+document.getElementById('nav-search')?.addEventListener('click', () => { 
+    pushState({ type: 'search' }); switchView('search', els.searchView); 
+});
+document.getElementById('nav-profile').addEventListener('click', () => { 
+    window.loadProfile(agent.session.did); 
+});
 
 window.execSearch = async (q) => {
     const query = typeof q === 'string' ? q : document.getElementById('search-input')?.value.trim();
     if (!query) return;
     const searchInput = document.getElementById('search-input');
     if (searchInput) searchInput.value = query;
+    pushState({ type: 'search' });
     switchView('search', els.searchView);
     try { 
         const res = await agent.app.bsky.feed.searchPosts({ q: query, limit: 30 }); 
@@ -512,7 +594,6 @@ document.getElementById('refresh-btn')?.addEventListener('click', () => {
     else if (!els.chatView.classList.contains('hidden')) fetchConvos();
 });
 
-document.getElementById('nav-search')?.addEventListener('click', () => { switchView('search', els.searchView); });
 document.getElementById('search-exec-btn')?.addEventListener('click', () => window.execSearch());
 
 document.getElementById('add-account-btn')?.addEventListener('click', () => {
