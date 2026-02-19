@@ -1,10 +1,5 @@
 name: Build and Release All Versions
 
-on:
-  push:
-    tags:
-      - 'v*'
-
 permissions:
   contents: write
 
