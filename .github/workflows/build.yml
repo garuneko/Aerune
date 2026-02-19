@@ -27,8 +27,23 @@ jobs:
           node-version: 20
           cache: "npm"
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Install dependencies (prefer npm ci, fallback to npm install)
+        shell: bash
+        run: |
+          set -e
+          if [ ! -f package-lock.json ]; then
+            echo "package-lock.json not found -> using npm install"
+            npm install --no-audit --no-fund
+            exit 0
+          fi
+
+          echo "Trying npm ci..."
+          if npm ci --no-audit --no-fund; then
+            echo "npm ci OK"
+          else
+            echo "npm ci failed (lockfile mismatch). Falling back to npm install..."
+            npm install --no-audit --no-fund
+          fi
 
       - name: Build App
         run: npm run dist
