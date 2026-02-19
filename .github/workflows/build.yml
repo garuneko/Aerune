@@ -32,16 +32,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # 1. electron-builderの自動アップロードは使わず、純粋にファイル生成だけを行う
       - name: Build App
         run: npx electron-builder --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Macの署名なしエラーとパブリッシュスキップを回避
-          CSC_LINK: ""
+          # CSC_LINK: "" を削除しました
           CSC_IDENTITY_AUTO_DISCOVERY: false
 
-      # 2. 実行結果画面(Artifacts)にファイルを保存（これまで通り）
       - name: Upload Artifacts (Actions)
         uses: actions/upload-artifact@v4
         with:
@@ -55,7 +52,6 @@ jobs:
             dist/*.blockmap
           if-no-files-found: ignore
 
-      # 3. ★ここが重要！タグ(v1.0.0等)の時だけ、GitHub公式アクションで確実にAssetsにアップロードする
       - name: Upload to GitHub Releases
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
