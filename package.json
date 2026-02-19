@@ -5,7 +5,8 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder"
+    "build": "electron-builder",
+    "dist": "electron-builder" 
   },
   "dependencies": {
     "@atproto/api": "^0.13.20"
@@ -17,21 +18,23 @@
   "build": {
     "appId": "com.garuneko.aerune",
     "productName": "Aerune",
-    "copyright": "Copyright © 2026 Mitsuki Hamada",
+    "copyright": "Copyright © 2026 garuneko",
     "directories": {
       "output": "dist"
     },
     "win": {
-      "target": "nsis",
-      "icon": "Aerunelogp.png"
+      "target": "nsis"
     },
     "mac": {
       "target": "dmg",
-      "icon": "Aerunelogp.png"
+      "identity": null
     },
     "linux": {
-      "target": "AppImage",
-      "icon": "Aerunelogp.png"
+      "target": "AppImage"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
     }
   }
 }
