@@ -33,3 +33,44 @@ MIT License
 
 ## 開発者
 がる ([@garuneko](https://garuneko.com))
+
+# Aerune - Bluesky Desktop Client
+
+A dedicated desktop client application for Bluesky.
+
+## Notice (Beta)
+
+- This application is in beta version. Unexpected behavior may occur.
+- Please use your Bluesky "App Password" to log in.
+
+## For Mac Users (First Launch Instructions)
+
+Due to macOS security features (Gatekeeper), you may see a warning message such as "The app is damaged and can't be opened. You should move it to the Trash" when launching the app for the first time.
+
+This warning appears because the app is not signed with Apple's paid developer certificate.
+
+### Steps to Unblock (Required for First Launch and Updates)
+
+1. Open the downloaded `.dmg` file and drag the app into your **Applications** folder
+2. Open the **Terminal** app (`Finder` → `Applications` → `Utilities` → `Terminal`)
+3. Copy and paste the following command and press Enter:
+```bash
+sudo xattr -rd com.apple.quarantine "/Applications/Aerune.app"
+```
+
+4. Enter your Mac login password and press Enter (characters won't appear on screen while typing, but this is normal)
+5. If no error appears, you're done. Launch the app from your Applications folder
+
+## System Requirements
+
+- **Windows**: Windows 10 or later
+- **macOS**: macOS 11 (Big Sur) or later
+
+## License
+
+MIT License
+
+## Developer
+
+garu ([@garuneko](https://garuneko.com))
+
