@@ -1,6 +1,27 @@
 const { BskyAgent, RichText } = require('@atproto/api'); 
 const { ipcRenderer, shell } = require('electron');
 
+// ★ 動的に追加するカスタムCSS (SVGの色付け、スレッド線など)
+const customStyles = document.createElement('style');
+customStyles.innerHTML = `
+    .action-icon { width: 16px; height: 16px; vertical-align: text-bottom; margin-right: 4px; opacity: 0.6; transition: all 0.2s; }
+    .action-btn:hover .action-icon { opacity: 1; transform: scale(1.1); }
+    /* いいね済みの赤色フィルタ */
+    .action-btn.liked .action-icon { filter: invert(27%) sepia(91%) saturate(3023%) hue-rotate(336deg) brightness(91%) contrast(96%); opacity: 1; }
+    /* リポスト済みの緑色フィルタ */
+    .action-btn.reposted .action-icon { filter: invert(53%) sepia(86%) saturate(417%) hue-rotate(99deg) brightness(96%) contrast(89%); opacity: 1; }
+    /* ブックマークの青色フィルタ */
+    .action-btn.bookmarked .action-icon { filter: invert(41%) sepia(92%) saturate(3027%) hue-rotate(194deg) brightness(101%) contrast(106%); opacity: 1; }
+    
+    /* スレッド連結線 */
+    .thread-line { position: relative; }
+    .thread-line::before {
+        content: ''; position: absolute; left: 44px; top: 65px; bottom: -15px;
+        width: 2px; background: #e5e7eb; z-index: 1;
+    }
+`;
+document.head.appendChild(customStyles);
+
 const translations = {
     ja: {
         nav_home: "ホーム", nav_notifications: "通知", nav_search: "検索", nav_profile: "プロフィール", nav_thread: "スレッド", nav_chat: "チャット", nav_settings: "設定", nav_bookmarks: "ブックマーク",
@@ -18,6 +39,7 @@ const translations = {
         settings_general: "一般設定", settings_moderation: "モデレーション",
         settings_lang: "言語 / Language", settings_limit: "TLや検索の読み込み件数 (10〜100)", settings_save: "保存", settings_saved: "設定を保存しました", 
         settings_nsfw: "NSFW画像にぼかしを入れる", settings_mutes: "ミュート中のアカウント", settings_blocks: "ブロック中のアカウント",
+        settings_bookmark_tab: "サイドバーにブックマークを表示する",
         pinned_post: "固定されたポスト",
         ctx_reply: "💬 返信", ctx_repost: "🔁 リポスト", ctx_quote: "📝 引用", ctx_profile: "👤 プロフィールを見る",
         ctx_pin: "📌 固定ポストに設定", ctx_unpin: "📌 固定ポストを解除",
@@ -48,6 +70,7 @@ const translations = {
         settings_general: "General", settings_moderation: "Moderation",
         settings_lang: "言語 / Language", settings_limit: "Timeline limit (10-100)", settings_save: "Save", settings_saved: "Settings saved", 
         settings_nsfw: "Blur NSFW Images", settings_mutes: "Muted Accounts", settings_blocks: "Blocked Accounts",
+        settings_bookmark_tab: "Show Bookmarks in sidebar",
         pinned_post: "Pinned Post",
         ctx_reply: "💬 Reply", ctx_repost: "🔁 Repost", ctx_quote: "📝 Quote", ctx_profile: "👤 View Profile",
         ctx_pin: "📌 Pin Post", ctx_unpin: "📌 Unpin Post",
@@ -68,6 +91,7 @@ let currentLang = localStorage.getItem('aerune_lang') || (navigator.language.sta
 let postLimit = parseInt(localStorage.getItem('aerune_post_limit')) || 30;
 if (isNaN(postLimit)) postLimit = 30;
 let nsfwBlur = localStorage.getItem('aerune_nsfw_blur') !== 'false';
+let showBookmarksConfig = localStorage.getItem('aerune_show_bookmarks') !== 'false';
 
 const t = (key, ...args) => {
     let text = translations[currentLang][key] || key;
@@ -79,7 +103,6 @@ const agent = new BskyAgent({ service: 'https://bsky.social' });
 let selectedImages = [], replyTarget = null, quoteTarget = null, savedAccounts = [], currentDid = null, currentConvoId = null;
 const els = {};
 
-// ★ ブックマーク状態をローカルで記憶・共有するための仕組み
 window.aeruneBookmarks = new Set();
 
 function hasSelection() {
@@ -145,12 +168,15 @@ async function initApp() {
     els.imagePreviewContainer = get('image-preview-container');
     els.ctxMenu = get('ctx-menu');
 
+    // サイドバーにブックマークを動的追加
     if (!document.getElementById('nav-bookmarks')) {
         const li = document.createElement('li');
         li.id = 'nav-bookmarks';
         li.setAttribute('data-i18n', 'nav_bookmarks');
         li.innerText = t('nav_bookmarks');
         li.onclick = () => { pushState({ type: 'bookmarks' }); switchView('bookmarks', els.bookmarksView); fetchBookmarks(); };
+        li.style.display = showBookmarksConfig ? 'block' : 'none';
+        
         const profileNav = document.getElementById('nav-profile');
         if (profileNav) profileNav.parentNode.insertBefore(li, profileNav.nextSibling);
         
@@ -160,6 +186,22 @@ async function initApp() {
         const mainEl = els.timelineDiv.parentNode;
         if (mainEl) mainEl.appendChild(bView);
         els.bookmarksView = bView;
+    }
+
+    // 設定画面にブックマークON/OFFスイッチを動的追加
+    if (els.settingsView && !document.getElementById('setting-bookmark-tab')) {
+        const genHeading = els.settingsView.querySelector('h3');
+        if (genHeading) {
+            const bmDiv = document.createElement('div');
+            bmDiv.style.marginBottom = '20px';
+            bmDiv.innerHTML = `
+                <label style="display:flex; align-items:center; font-weight:bold; cursor:pointer;">
+                    <input type="checkbox" id="setting-bookmark-tab" style="margin-right:8px; width:18px; height:18px;" ${showBookmarksConfig ? 'checked' : ''}>
+                    <span data-i18n="settings_bookmark_tab">${t('settings_bookmark_tab')}</span>
+                </label>
+            `;
+            genHeading.nextElementSibling.parentNode.insertBefore(bmDiv, genHeading.nextElementSibling.nextElementSibling.nextElementSibling);
+        }
     }
 
     if (els.viewTitle && !document.getElementById('back-btn')) {
@@ -209,7 +251,6 @@ async function initApp() {
     } catch (e) { showLoginForm(); }
 }
 
-// ★ 起動時やログイン時にブックマーク一覧を同期して記憶する関数
 async function syncBookmarksData() {
     try {
         let pdsUrl = 'https://bsky.social';
@@ -277,7 +318,6 @@ function setupLoggedInUI() {
         document.getElementById('profile-snippet').innerHTML = `<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;"><img src="${res.data.avatar}" style="width: 40px; height: 40px; border-radius: 50%;"><strong>${res.data.displayName || res.data.handle}</strong></div>`;
         renderAccountList();
     });
-    // ブックマークを裏で同期
     syncBookmarksData();
     pushState({ type: 'home' });
     switchView('home', els.timelineDiv);
@@ -298,12 +338,31 @@ function renderAccountList() {
     });
 }
 
+// ★ URLハイパーリンク化の強化（httpなし対応）と軽量化
 const linkifyCache = new Map();
 function linkify(text) {
     if (!text) return '';
     if (linkifyCache.has(text)) return linkifyCache.get(text);
+    
     let escaped = text.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag]));
-    escaped = escaped.replace(/(https?:\/\/[^\s]+)/g, url => `<a href="#" onclick="shell.openExternal('${url}'); event.stopPropagation(); return false;" style="color: var(--bsky-blue); text-decoration: none;">${url}</a>`);
+    
+    // httpなしのドメインやURLも安全にリンク化
+    escaped = escaped.replace(/(?:https?:\/\/|www\.)[a-zA-Z0-9\-.]+\.[a-zA-Z]{2,}(?:\/[^\s]*)?|[a-zA-Z0-9\-]+\.[a-zA-Z]{2,}(?:\/[^\s]*)?/g, match => {
+        if (match.includes('@') && !match.startsWith('http')) return match; 
+        if (!match.includes('.') || match.length < 5) return match; 
+        let url = match;
+        if (!url.startsWith('http')) url = 'https://' + url;
+        
+        const lastChar = url.slice(-1);
+        let punctuation = '';
+        if (/[.,;!?)]/.test(lastChar)) {
+            url = url.slice(0, -1);
+            punctuation = lastChar;
+            match = match.slice(0, -1);
+        }
+        return `<a href="#" onclick="shell.openExternal('${url}'); event.stopPropagation(); return false;" style="color: var(--bsky-blue); text-decoration: none;">${match}</a>${punctuation}`;
+    });
+
     escaped = escaped.replace(/(?:^|\s)(#[^\s#]+)/g, (match, tag) => {
         const space = match.startsWith(' ') ? ' ' : '';
         return `${space}<a href="#" onclick="window.execSearch('${tag.trim()}'); event.stopPropagation(); return false;" style="color: var(--bsky-blue); text-decoration: none;">${tag}</a>`;
@@ -313,6 +372,7 @@ function linkify(text) {
         const cleanHandle = handle.trim().substring(1);
         return `${space}<a href="#" onclick="window.loadProfile('${cleanHandle}'); event.stopPropagation(); return false;" style="color: var(--bsky-blue); text-decoration: none;">${handle.trim()}</a>`;
     });
+    
     if (linkifyCache.size > 500) linkifyCache.clear();
     linkifyCache.set(text, escaped);
     return escaped;
@@ -377,9 +437,7 @@ function createPostElement(post, isThreadRoot = false, isQuoteModal = false, rea
                 showContextMenu(e.clientX, e.clientY, [{ label: t('save_image'), action: () => downloadImage(e.target.dataset.fullsize || e.target.src) }]);
                 return;
             }
-            // ★ グローバルな記憶リストを参照して「追加/外す」を正しく切り替え
             const isBookmarkedLocally = window.aeruneBookmarks.has(post.uri) || !!postViewer.bookmark;
-            
             let opts = [
                 { label: t('ctx_reply'), action: () => window.prepareReply(post.uri, post.cid, author.handle, root.uri, root.cid) },
                 { label: t('ctx_repost'), action: () => window.doRepost(post.uri, post.cid, postViewer.repost) },
@@ -419,6 +477,8 @@ function createPostElement(post, isThreadRoot = false, isQuoteModal = false, rea
                 if (rec.embeds && rec.embeds[0] && rec.embeds[0].$type === 'app.bsky.embed.images#view') {
                     quoteMediaHtml = `<div class="post-images" style="margin-top:8px;">` + rec.embeds[0].images.map(img => `<img src="${img.thumb}" data-fullsize="${img.fullsize}" class="${imgClass}" style="${imgStyle}" onclick="window.openModal('${img.fullsize}'); event.stopPropagation();">`).join('') + `</div>`;
                 }
+                // ★ 引用の引数渡しバグ修正：encodeURIComponent でエスケープ
+                const safeTextArg = encodeURIComponent(rec.value?.text || rec.record?.text || '');
                 embedHtml = `<div class="embedded-quote" onclick="window.openQuoteModal(event, ${JSON.stringify(rec).replace(/"/g, '&quot;')}); event.stopPropagation();"><strong>${rec.author.displayName || rec.author.handle}</strong> <span style="color:gray;">@${rec.author.handle}</span><div style="font-size:0.9em; margin-top:4px;">${linkify(rec.value?.text || rec.record?.text)}</div>${quoteMediaHtml}</div>`;
             }
         }
@@ -444,9 +504,12 @@ function createPostElement(post, isThreadRoot = false, isQuoteModal = false, rea
     }
 
     const bookmarkCountHtml = (isMe && typeof post.bookmarkCount !== 'undefined' && post.bookmarkCount > 0) 
-        ? `<button class="action-btn" style="cursor:default; color:var(--bsky-blue);">🔖 ${post.bookmarkCount}</button>` 
+        ? `<button class="action-btn bookmarked" style="cursor:default;"><img src="bookmark.svg" class="action-icon"> ${post.bookmarkCount}</button>` 
         : '';
 
+    // ★ SVGアイコンへの置き換えと、長文引用バグの修正
+    const safeQuoteText = encodeURIComponent(post.record?.text || post.value?.text || '');
+    
     div.innerHTML = `
         <img src="${author.avatar || ''}" class="post-avatar" onclick="window.loadProfile('${author.handle}'); event.stopPropagation();">
         <div class="post-content">
@@ -455,12 +518,12 @@ function createPostElement(post, isThreadRoot = false, isQuoteModal = false, rea
             <div class="post-text">${linkify(post.record?.text || post.value?.text)}</div>
             ${embedHtml}
             <div class="post-actions" onclick="event.stopPropagation();">
-                <button onclick="window.prepareReply('${post.uri}', '${post.cid}', '${author.handle}', '${root.uri}', '${root.cid}')" class="action-btn">💬 ${post.replyCount || 0}</button>
-                <button onclick="window.doRepost('${post.uri}', '${post.cid}', ${postViewer.repost ? `'${postViewer.repost}'` : 'null'})" class="action-btn ${postViewer.repost ? 'reposted' : ''}">🔁 ${post.repostCount || 0}</button>
-                <button onclick="window.prepareQuote('${post.uri}', '${post.cid}', '${author.handle}', '${(post.record?.text || post.value?.text || '').replace(/'/g, "\\'")}')" class="action-btn">📝</button>
-                <button onclick="window.doLike('${post.uri}', '${post.cid}', ${postViewer.like ? `'${postViewer.like}'` : 'null'})" class="action-btn ${postViewer.like ? 'liked' : ''}">❤️ ${post.likeCount || 0}</button>
+                <button onclick="window.prepareReply('${post.uri}', '${post.cid}', '${author.handle}', '${root.uri}', '${root.cid}')" class="action-btn"><img src="reply.svg" class="action-icon"> ${post.replyCount || 0}</button>
+                <button onclick="window.doRepost('${post.uri}', '${post.cid}', ${postViewer.repost ? `'${postViewer.repost}'` : 'null'})" class="action-btn ${postViewer.repost ? 'reposted' : ''}"><img src="repost.svg" class="action-icon"> ${post.repostCount || 0}</button>
+                <button onclick="window.prepareQuote('${post.uri}', '${post.cid}', '${author.handle}', decodeURIComponent('${safeQuoteText}'))" class="action-btn"><img src="quote.svg" class="action-icon"></button>
+                <button onclick="window.doLike('${post.uri}', '${post.cid}', ${postViewer.like ? `'${postViewer.like}'` : 'null'})" class="action-btn ${postViewer.like ? 'liked' : ''}"><img src="like.svg" class="action-icon"> ${post.likeCount || 0}</button>
                 ${bookmarkCountHtml}
-                ${isMe ? `<button onclick="window.deletePost('${post.uri}')" class="action-btn" style="margin-left:auto;">🗑️</button>` : ''}
+                ${isMe ? `<button onclick="window.deletePost('${post.uri}')" class="action-btn" style="margin-left:auto;"><img src="trash.svg" class="action-icon"></button>` : ''}
             </div>
         </div>`;
     return div;
@@ -517,18 +580,15 @@ window.deletePost = async (uri) => {
     try { await agent.deletePost(uri); fetchTimeline(); } catch (e) { alert(t('delete_failed')); }
 };
 
-// ★ ブックマークの追加と削除を正確に処理する関数
 window.toggleBookmark = async (post) => {
     try {
         const isBookmarkedLocally = window.aeruneBookmarks.has(post.uri) || !!(post.viewer && post.viewer.bookmark);
-        
         let pdsUrl = 'https://bsky.social';
         if (agent.pdsUrl) pdsUrl = agent.pdsUrl;
         else if (agent.api?.xrpc?.uri) pdsUrl = agent.api.xrpc.uri;
         pdsUrl = pdsUrl.toString().replace(/\/$/, '');
 
         if (isBookmarkedLocally) {
-            // ★ 外す処理：対象ポストのURIを指定して削除
             const res = await fetch(`${pdsUrl}/xrpc/app.bsky.bookmark.deleteBookmark`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${agent.session.accessJwt}` },
@@ -541,7 +601,6 @@ window.toggleBookmark = async (post) => {
             alert(t('action_success'));
             if (currentState?.type === 'bookmarks') fetchBookmarks();
         } else {
-            // ★ 追加処理
             const res = await fetch(`${pdsUrl}/xrpc/app.bsky.bookmark.createBookmark`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${agent.session.accessJwt}` },
@@ -584,8 +643,7 @@ async function fetchBookmarks() {
         const bookmarks = data.bookmarks || [];
         const uris = [];
         
-        window.aeruneBookmarks.clear(); // キャッシュを最新化
-        
+        window.aeruneBookmarks.clear();
         for (const b of bookmarks) {
             const subjectUri = b.subject ? b.subject.uri : (b.record ? b.record.uri : null);
             if (subjectUri) {
@@ -694,10 +752,28 @@ async function checkNotifs() {
     try { const res = await agent.countUnreadNotifications(); els.notifBadge.classList.toggle('hidden', res.data.count === 0); } catch(e) {}
 }
 
+// ★ 軽量化：DocumentFragmentを使った一括DOM追加 ＆ スレッドの連結線付与
 function renderPosts(posts, container) { 
     if (!container) return; 
     container.innerHTML = ''; 
-    posts.forEach(item => container.appendChild(createPostElement(item.post || item, false, false, item.reason))); 
+    const fragment = document.createDocumentFragment();
+    let prevPostUri = null;
+
+    posts.forEach(item => {
+        const post = item.post || item;
+        const el = createPostElement(post, false, false, item.reason); 
+        
+        // タイムライン上で直前のポストが親ポストなら「スレッド線」を引く
+        if (item.reply && item.reply.parent && item.reply.parent.uri === prevPostUri) {
+            if (fragment.lastChild) {
+                fragment.lastChild.classList.add('thread-line');
+            }
+        }
+        
+        prevPostUri = post.uri;
+        fragment.appendChild(el);
+    }); 
+    container.appendChild(fragment);
 }
 
 async function fetchTimeline() { try { const res = await agent.getTimeline({ limit: postLimit }); renderPosts(res.data.feed, els.timelineDiv); } catch (e) {} }
@@ -762,17 +838,30 @@ window.loadThread = async (uri, isBack = false) => {
     try {
         const res = await agent.getPostThread({ uri, depth: 10, parentHeight: 10 });
         container.innerHTML = '';
+        const fragment = document.createDocumentFragment();
+        
         const renderThreadItem = (item, isRoot = false) => {
-            if (item.parent) renderThreadItem(item.parent);
-            if (item.post) container.appendChild(createPostElement(item.post, isRoot));
-            if (item.replies) item.replies.forEach(reply => {
-                if (reply.post) {
-                    const el = createPostElement(reply.post); el.style.marginLeft = '40px'; el.style.borderLeft = '2px solid #eee';
-                    container.appendChild(el);
+            if (item.parent) {
+                renderThreadItem(item.parent);
+                if (fragment.lastChild) fragment.lastChild.classList.add('thread-line');
+            }
+            if (item.post) {
+                const el = createPostElement(item.post, isRoot);
+                fragment.appendChild(el);
+                if (item.replies && item.replies.length > 0) {
+                    el.classList.add('thread-line');
+                    item.replies.forEach(reply => {
+                        if (reply.post) {
+                            const rel = createPostElement(reply.post); 
+                            rel.style.marginLeft = '40px'; 
+                            fragment.appendChild(rel);
+                        }
+                    });
                 }
-            });
+            }
         };
         renderThreadItem(res.data.thread, true);
+        container.appendChild(fragment);
     } catch (e) { container.innerHTML = '<div style="padding:20px;">Failed to load thread.</div>'; }
 };
 
@@ -872,8 +961,7 @@ async function loadModerationList(type) {
         container.innerHTML = '';
         if (items.length === 0) container.innerHTML = '<div style="padding:10px;">No accounts found.</div>';
         items.forEach(item => {
-            const div = document.createElement('div');
-            div.className = 'user-list-item';
+            const div = document.createElement('div'); div.className = 'user-list-item';
             div.innerHTML = `<div><strong>${item.name || item.handle}</strong> <span style="color:gray;">@${item.handle}</span></div><button class="sidebar-action-btn" style="width:auto; padding:4px 8px;">${type === 'blocks' ? t('ctx_unblock') : t('ctx_unmute')}</button>`;
             div.querySelector('button').onclick = () => {
                 if (type === 'blocks') window.toggleBlock(item.did, item.uri);
@@ -994,13 +1082,22 @@ document.getElementById('settings-save-btn')?.addEventListener('click', () => {
     const newLang = document.getElementById('setting-lang').value;
     const newLimit = parseInt(document.getElementById('setting-limit').value) || 30;
     const newBlur = document.getElementById('setting-nsfw').checked;
+    const newShowBookmarks = document.getElementById('setting-bookmark-tab').checked;
+    
     localStorage.setItem('aerune_lang', newLang);
     localStorage.setItem('aerune_post_limit', newLimit.toString());
     localStorage.setItem('aerune_nsfw_blur', newBlur.toString());
+    localStorage.setItem('aerune_show_bookmarks', newShowBookmarks.toString());
+    
     currentLang = newLang;
     nsfwBlur = newBlur;
+    showBookmarksConfig = newShowBookmarks;
     postLimit = Math.min(Math.max(newLimit, 10), 100);
     document.getElementById('setting-limit').value = postLimit;
+    
+    const navBookmarks = document.getElementById('nav-bookmarks');
+    if (navBookmarks) navBookmarks.style.display = showBookmarksConfig ? 'block' : 'none';
+    
     applyTranslations();
     const msg = document.getElementById('settings-msg');
     msg.innerText = t('settings_saved');
