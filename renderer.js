@@ -3,7 +3,7 @@ const { ipcRenderer, shell } = require('electron');
 
 const translations = {
     ja: {
-        nav_home: "ホーム", nav_notifications: "通知", nav_search: "検索", nav_profile: "プロフィール", nav_thread: "スレッド", nav_chat: "チャット",
+        nav_home: "ホーム", nav_notifications: "通知", nav_search: "検索", nav_profile: "プロフィール", nav_thread: "スレッド", nav_chat: "チャット", nav_settings: "設定",
         add_account: "＋ アカウント追加", logout: "ログアウト", post_placeholder: "今なにしてる？", send: "送信",
         login_title: "Aerune ログイン", login_id: "ハンドル名 (handle.bsky.social)", login_pw: "アプリパスワード", login_btn: "ログイン",
         reply_placeholder: "@{0} への返信", quote_placeholder: "@{0} を引用中...", login_failed: "ログインに失敗しました。", post_failed: "投稿に失敗しました。",
@@ -14,10 +14,11 @@ const translations = {
         notif_follow: "があなたをフォローしました", notif_mention: "があなたをメンションしました",
         notif_reply: "があなたに返信しました", notif_quote: "があなたのポストを引用しました",
         search_btn: "検索", search_placeholder: "検索キーワードを入力...", reposted_by: "🔁 {0} がリポスト", logout_confirm: "現在のアカウントからログアウトしますか？",
-        profile_reply: "＠ リプライ"
+        profile_reply: "＠ リプライ",
+        settings_lang: "言語 / Language", settings_limit: "TLや検索の読み込み件数 (10〜100)", settings_save: "保存", settings_saved: "設定を保存しました", pinned_post: "固定されたポスト"
     },
     en: {
-        nav_home: "Home", nav_notifications: "Notifications", nav_search: "Search", nav_profile: "Profile", nav_thread: "Thread", nav_chat: "Chat",
+        nav_home: "Home", nav_notifications: "Notifications", nav_search: "Search", nav_profile: "Profile", nav_thread: "Thread", nav_chat: "Chat", nav_settings: "Settings",
         add_account: "+ Add Account", logout: "Logout", post_placeholder: "What's up?", send: "Post",
         login_title: "Login to Aerune", login_id: "Handle (handle.bsky.social)", login_pw: "App Password", login_btn: "Login",
         reply_placeholder: "Reply to @{0}", quote_placeholder: "Quoting @{0}...", login_failed: "Login failed.", post_failed: "Post failed.", 
@@ -28,11 +29,14 @@ const translations = {
         notif_follow: "followed you", notif_mention: "mentioned you",
         notif_reply: "replied to you", notif_quote: "quoted your post",
         search_btn: "Search", search_placeholder: "Enter keyword...", reposted_by: "🔁 Reposted by {0}", logout_confirm: "Are you sure you want to log out of the current account?",
-        profile_reply: "@ Reply"
+        profile_reply: "@ Reply",
+        settings_lang: "言語 / Language", settings_limit: "Timeline & Search limit (10-100)", settings_save: "Save", settings_saved: "Settings saved", pinned_post: "Pinned Post"
     }
 };
 
 let currentLang = localStorage.getItem('aerune_lang') || (navigator.language.startsWith('ja') ? 'ja' : 'en');
+let postLimit = parseInt(localStorage.getItem('aerune_post_limit')) || 30;
+
 const t = (key, ...args) => {
     let text = translations[currentLang][key] || key;
     args.forEach((arg, i) => { text = text.replace(`{${i}}`, arg); });
@@ -71,6 +75,7 @@ function goBack() {
         else if (prevState.type === 'search') { switchView('search', els.searchView); }
         else if (prevState.type === 'profile') { window.loadProfile(prevState.actor, true); }
         else if (prevState.type === 'thread') { window.loadThread(prevState.uri, true); }
+        else if (prevState.type === 'settings') { switchView('settings', els.settingsView); }
     }
 }
 
@@ -88,6 +93,7 @@ async function initApp() {
     els.searchView = get('search-view');
     els.profileView = get('profile-view');
     els.threadView = get('thread-view');
+    els.settingsView = get('settings-view');
     els.viewTitle = get('view-title');
     els.postInput = get('post-input');
     els.loginForm = get('login-form');
@@ -109,6 +115,10 @@ async function initApp() {
     if (els.postInput) {
         els.postInput.style.minHeight = '80px';
     }
+
+    // 設定画面の初期値セット
+    document.getElementById('setting-lang').value = currentLang;
+    document.getElementById('setting-limit').value = postLimit;
 
     applyTranslations();
 
@@ -396,11 +406,11 @@ function renderPosts(posts, container) {
     posts.forEach(item => container.appendChild(createPostElement(item.post || item, false, false, item.reason))); 
 }
 
-async function fetchTimeline() { try { const res = await agent.getTimeline({ limit: 30 }); renderPosts(res.data.feed, els.timelineDiv); } catch (e) {} }
+async function fetchTimeline() { try { const res = await agent.getTimeline({ limit: postLimit }); renderPosts(res.data.feed, els.timelineDiv); } catch (e) {} }
 
 async function fetchNotifications() {
     try {
-        const res = await agent.listNotifications({ limit: 30 });
+        const res = await agent.listNotifications({ limit: postLimit });
         const notifications = res.data.notifications;
         const uris = notifications.filter(n => (n.reason === 'like' || n.reason === 'repost') && n.reasonSubject).map(n => n.reasonSubject);
         const postMap = {};
@@ -409,7 +419,6 @@ async function fetchNotifications() {
         notifications.forEach(n => {
             const div = document.createElement('div'); div.className = 'post';
             
-            // ★ フォロー通知とそれ以外の通知で遷移先を分岐
             div.onclick = () => {
                 if (window.getSelection().toString().length > 0) return;
                 
@@ -459,20 +468,54 @@ window.loadProfile = async (actor, isBack = false) => {
     if (!isBack) pushState({ type: 'profile', actor });
     switchView('profile', els.profileView);
     const container = document.getElementById('profile-header-container');
+    const pinnedContainer = document.getElementById('profile-pinned');
+    const timelineContainer = document.getElementById('profile-timeline');
+    
     container.innerHTML = 'Loading...';
+    pinnedContainer.innerHTML = '';
+    timelineContainer.innerHTML = '';
+
     try {
         const res = await agent.getProfile({ actor });
         const p = res.data;
         const dmBtn = p.did !== agent.session.did ? `<button onclick="window.startDirectMessage('${p.did}')" class="sidebar-action-btn" style="width:auto; padding:5px 15px; margin-right:10px;">${t('send_dm')}</button>` : '';
         const replyBtn = `<button onclick="window.prepareProfileReply('${p.handle}')" class="sidebar-action-btn" style="width:auto; padding:5px 15px;">${t('profile_reply')}</button>`;
-        
         const actionBtns = p.did !== agent.session.did ? `<div style="margin-top:15px;">${dmBtn}${replyBtn}</div>` : '';
-        
         const rel = p.viewer?.following && p.viewer?.followedBy ? `<span class="relationship-badge">${t('mutual')}</span>` : (p.viewer?.following ? `<span class="relationship-badge">${t('following')}</span>` : (p.viewer?.followedBy ? `<span class="relationship-badge">${t('follow_me')}</span>` : ''));
         
         container.innerHTML = `<img src="${p.banner || ''}" style="width:100%; height:150px; object-fit:cover;"><div style="padding:20px; position:relative;"><img src="${p.avatar || ''}" style="width:80px; height:80px; border-radius:50%; border:4px solid white; position:absolute; top:-40px;"><div style="margin-top:40px;"><div style="font-size:20px; font-weight:bold;">${p.displayName || p.handle}${rel}</div><div style="color:gray;">@${p.handle}</div><div style="margin-top:10px; word-break: break-word;">${linkify(p.description || '')}</div>${actionBtns}</div></div>`;
-        const feed = await agent.getAuthorFeed({ actor, limit: 30 });
-        renderPosts(feed.data.feed, document.getElementById('profile-timeline'));
+        
+        // 通常のタイムライン取得
+        const feedRes = await agent.getAuthorFeed({ actor, limit: postLimit });
+        let feedItems = feedRes.data.feed;
+
+        // 固定ポストの表示処理
+        if (p.pinnedPost) {
+            try {
+                const pinnedRes = await agent.getPosts({ uris: [p.pinnedPost.uri] });
+                if (pinnedRes.data.posts.length > 0) {
+                    const pinnedPost = pinnedRes.data.posts[0];
+                    const pinnedEl = createPostElement(pinnedPost, false, false);
+                    
+                    const badge = document.createElement('div');
+                    badge.innerHTML = `<span style="font-size: 0.85em; color: gray; font-weight: bold;">📌 ${t('pinned_post')}</span>`;
+                    badge.style.marginBottom = "8px";
+                    pinnedEl.insertBefore(badge, pinnedEl.firstChild);
+                    
+                    // 固定ポストをハイライト
+                    pinnedEl.style.border = "2px solid var(--bsky-blue)";
+                    pinnedEl.style.backgroundColor = "rgba(0, 133, 255, 0.05)";
+                    pinnedContainer.appendChild(pinnedEl);
+
+                    // タイムラインの重複を排除
+                    feedItems = feedItems.filter(item => item.post.uri !== p.pinnedPost.uri);
+                }
+            } catch (err) {
+                console.error("Failed to load pinned post", err);
+            }
+        }
+
+        renderPosts(feedItems, timelineContainer);
     } catch (e) { container.innerHTML = 'Failed to load profile.'; }
 };
 
@@ -534,7 +577,7 @@ window.startDirectMessage = async (did) => {
 
 function switchView(viewId, activeDiv) {
     if (!els.viewTitle) return; els.viewTitle.innerText = t('nav_' + viewId);
-    [els.timelineDiv, els.notifDiv, els.chatView, els.searchView, els.profileView, els.threadView].forEach(d => d?.classList.add('hidden'));
+    [els.timelineDiv, els.notifDiv, els.chatView, els.searchView, els.profileView, els.threadView, els.settingsView].forEach(d => d?.classList.add('hidden'));
     if(activeDiv) activeDiv.classList.remove('hidden');
     document.querySelectorAll('.nav-links li').forEach(li => li.classList.remove('active'));
     document.getElementById(`nav-${viewId}`)?.classList.add('active');
@@ -572,6 +615,10 @@ document.getElementById('nav-search')?.addEventListener('click', () => {
 document.getElementById('nav-profile').addEventListener('click', () => { 
     window.loadProfile(agent.session.did); 
 });
+// ★ 設定ボタン
+document.getElementById('nav-settings').addEventListener('click', () => { 
+    pushState({ type: 'settings' }); switchView('settings', els.settingsView); 
+});
 
 window.execSearch = async (q) => {
     const query = typeof q === 'string' ? q : document.getElementById('search-input')?.value.trim();
@@ -581,7 +628,7 @@ window.execSearch = async (q) => {
     pushState({ type: 'search' });
     switchView('search', els.searchView);
     try { 
-        const res = await agent.app.bsky.feed.searchPosts({ q: query, limit: 30 }); 
+        const res = await agent.app.bsky.feed.searchPosts({ q: query, limit: postLimit }); 
         renderPosts(res.data.posts, document.getElementById('search-results') || els.searchResults); 
     } catch (e) {}
 };
@@ -612,6 +659,25 @@ document.getElementById('logout-btn')?.addEventListener('click', async () => {
     }
 });
 
+// ★ 設定保存ボタン
+document.getElementById('settings-save-btn')?.addEventListener('click', () => {
+    const newLang = document.getElementById('setting-lang').value;
+    const newLimit = parseInt(document.getElementById('setting-limit').value) || 30;
+    
+    localStorage.setItem('aerune_lang', newLang);
+    localStorage.setItem('aerune_post_limit', newLimit.toString());
+    
+    currentLang = newLang;
+    postLimit = newLimit > 100 ? 100 : (newLimit < 10 ? 10 : newLimit);
+    document.getElementById('setting-limit').value = postLimit;
+    
+    applyTranslations();
+    
+    const msg = document.getElementById('settings-msg');
+    msg.innerText = t('settings_saved');
+    setTimeout(() => { msg.innerText = ''; }, 3000);
+});
+
 document.getElementById('modal-close')?.addEventListener('click', () => { document.getElementById('image-modal')?.classList.add('hidden'); });
 document.getElementById('image-modal')?.addEventListener('click', (e) => { if (e.target.id === 'image-modal') document.getElementById('image-modal').classList.add('hidden'); });
 
@@ -621,6 +687,18 @@ window.addEventListener('keydown', (e) => {
         resetPostForm(); 
         document.getElementById('quote-modal')?.classList.add('hidden'); 
         document.getElementById('image-modal')?.classList.add('hidden'); 
+    }
+});
+
+// ★ Cmd+V / Ctrl+V での画像ペースト対応
+window.addEventListener('paste', (e) => {
+    if (e.clipboardData && e.clipboardData.files.length > 0) {
+        const files = Array.from(e.clipboardData.files).filter(f => f.type.startsWith('image/'));
+        if (files.length > 0) {
+            e.preventDefault();
+            selectedImages = [...selectedImages, ...files].slice(0, 4);
+            updateImagePreview();
+        }
     }
 });
 
