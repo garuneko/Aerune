@@ -24,7 +24,8 @@ const translations = {
         ctx_follow: "➕ フォロー", ctx_unfollow: "➖ フォロー解除",
         ctx_mute: "🔇 ミュート", ctx_unmute: "🔊 ミュート解除",
         ctx_block: "🚫 ブロック", ctx_unblock: "✅ ブロック解除",
-        save_image: "💾 画像を保存", action_success: "完了しました"
+        save_image: "💾 画像を保存", action_success: "完了しました",
+        stats_posts: "ポスト", stats_following: "フォロー", stats_followers: "フォロワー"
     },
     en: {
         nav_home: "Home", nav_notifications: "Notifications", nav_search: "Search", nav_profile: "Profile", nav_thread: "Thread", nav_chat: "Chat", nav_settings: "Settings",
@@ -48,7 +49,8 @@ const translations = {
         ctx_follow: "➕ Follow", ctx_unfollow: "➖ Unfollow",
         ctx_mute: "🔇 Mute", ctx_unmute: "🔊 Unmute",
         ctx_block: "🚫 Block", ctx_unblock: "✅ Unblock",
-        save_image: "💾 Save Image", action_success: "Success"
+        save_image: "💾 Save Image", action_success: "Success",
+        stats_posts: "Posts", stats_following: "Following", stats_followers: "Followers"
     }
 };
 
@@ -66,6 +68,14 @@ const t = (key, ...args) => {
 const agent = new BskyAgent({ service: 'https://bsky.social' });
 let selectedImages = [], replyTarget = null, quoteTarget = null, savedAccounts = [], currentDid = null, currentConvoId = null;
 const els = {};
+
+// テキスト選択判定
+function hasSelection() {
+    try {
+        const sel = window.getSelection();
+        return sel && !sel.isCollapsed && sel.toString().trim().length > 0;
+    } catch (e) { return false; }
+}
 
 let historyStack = [];
 let currentState = null;
@@ -157,7 +167,7 @@ async function initApp() {
         });
     }
 
-    document.addEventListener('click', () => { if (els.ctxMenu) els.ctxMenu.classList.add('hidden'); });
+    document.addEventListener('click', (e) => { if (e.button === 0 && els.ctxMenu) els.ctxMenu.classList.add('hidden'); });
     document.querySelector('.content')?.addEventListener('scroll', () => { if (els.ctxMenu) els.ctxMenu.classList.add('hidden'); });
 
     try {
@@ -183,9 +193,13 @@ async function login() {
             await switchAccount(res.data.did);
         }
     } catch (e) {
-        // ★ エラー理由の詳細表示パッチ
         console.error("Login Error:", e);
-        alert(`${t('login_failed')}\nReason: ${e.message || String(e)}`);
+        const reason = e.message || String(e);
+        // ★ ネットワーク制限時にブラウザ確認を促すパッチ
+        const confirmMsg = `${t('login_failed')}\n\n原因: ${reason}\n\nネットワーク制限の可能性があります。ブラウザで認証が必要か確認しますか？`;
+        if (confirm(confirmMsg)) {
+            shell.openExternal('https://bsky.app');
+        }
     } finally { 
         btn.disabled = false; 
         btn.innerText = t('login_btn'); 
@@ -250,6 +264,7 @@ function linkify(text) {
 }
 
 function showContextMenu(x, y, items) {
+    if (!els.ctxMenu) return;
     els.ctxMenu.innerHTML = '';
     items.forEach(item => {
         if (item.divider) {
@@ -264,8 +279,9 @@ function showContextMenu(x, y, items) {
         }
     });
     els.ctxMenu.classList.remove('hidden');
-    let posX = Math.min(x, window.innerWidth - els.ctxMenu.offsetWidth - 10);
-    let posY = Math.min(y, window.innerHeight - els.ctxMenu.offsetHeight - 10);
+    const rect = els.ctxMenu.getBoundingClientRect();
+    let posX = Math.max(0, Math.min(x, window.innerWidth - rect.width - 10));
+    let posY = Math.max(0, Math.min(y, window.innerHeight - rect.height - 10));
     els.ctxMenu.style.left = `${posX}px`;
     els.ctxMenu.style.top = `${posY}px`;
 }
@@ -295,22 +311,21 @@ function createPostElement(post, isThreadRoot = false, isQuoteModal = false, rea
     
     if (!isQuoteModal) {
         div.onclick = () => {
-            if (window.getSelection().toString().length > 0) return;
+            if (hasSelection()) return;
             window.loadThread(post.uri);
         };
         div.addEventListener('contextmenu', async (e) => {
             e.preventDefault(); e.stopPropagation();
-            if (window.getSelection().toString().length > 0) return;
+            if (hasSelection()) return;
 
-            // ★ 画像であれば全て「画像保存」を出すように修正（クラス縛り解除）
             if (e.target.tagName === 'IMG') {
-                showContextMenu(e.pageX, e.pageY, [
+                showContextMenu(e.clientX, e.clientY, [
                     { label: t('save_image'), action: () => downloadImage(e.target.dataset.fullsize || e.target.src) }
                 ]);
                 return;
             }
 
-            const isMe = author.did === agent.session.did;
+            const isMe = agent.session && author.did === agent.session.did;
             let opts = [
                 { label: t('ctx_reply'), action: () => window.prepareReply(post.uri, post.cid, author.handle, root.uri, root.cid) },
                 { label: t('ctx_repost'), action: () => window.doRepost(post.uri, post.cid, postViewer.repost) },
@@ -328,7 +343,7 @@ function createPostElement(post, isThreadRoot = false, isQuoteModal = false, rea
                 opts.push({ label: authorViewer.muted ? t('ctx_unmute') : t('ctx_mute'), action: () => window.toggleMute(author.did, authorViewer.muted) });
                 opts.push({ label: authorViewer.blocking ? t('ctx_unblock') : t('ctx_block'), action: () => window.toggleBlock(author.did, authorViewer.blocking), color: '#d93025' });
             }
-            showContextMenu(e.pageX, e.pageY, opts);
+            showContextMenu(e.clientX, e.clientY, opts);
         });
     }
 
@@ -538,7 +553,6 @@ window.prepareReply = (uri, cid, handle, rootUri, rootCid) => {
 window.prepareQuote = (uri, cid, handle, text) => {
     quoteTarget = { uri, cid };
     els.quotePreview.classList.remove('hidden');
-    // ★ HTMLエスケープによるXSS対策パッチ
     const safeText = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     els.quotePreview.innerHTML = `<span class="quote-preview-close" onclick="resetPostForm()">×</span><strong>@${handle}</strong>: ${safeText.substring(0, 60)}...`;
     els.postInput.focus();
@@ -579,25 +593,24 @@ async function fetchNotifications() {
             const div = document.createElement('div'); div.className = 'post';
             
             div.onclick = () => {
-                if (window.getSelection().toString().length > 0) return;
+                if (hasSelection()) return;
                 if (n.reason === 'follow') window.loadProfile(n.author.handle);
                 else if (n.reasonSubject || n.uri) window.loadThread(n.reasonSubject || n.uri);
             };
 
             div.addEventListener('contextmenu', (e) => {
                 e.preventDefault(); e.stopPropagation();
-                if (window.getSelection().toString().length > 0) return;
+                if (hasSelection()) return;
 
-                // ★ 通知欄でも画像保存メニューを適用
                 if (e.target.tagName === 'IMG') {
-                    showContextMenu(e.pageX, e.pageY, [
+                    showContextMenu(e.clientX, e.clientY, [
                         { label: t('save_image'), action: () => downloadImage(e.target.dataset.fullsize || e.target.src) }
                     ]);
                     return;
                 }
 
                 const authorViewer = n.author.viewer || {};
-                const isMe = n.author.did === agent.session.did;
+                const isMe = agent.session && n.author.did === agent.session.did;
                 
                 let opts = [];
                 if (n.reason !== 'follow' && (n.reasonSubject || n.uri)) {
@@ -608,10 +621,10 @@ async function fetchNotifications() {
                 if (!isMe) {
                     opts.push({ divider: true });
                     opts.push({ label: authorViewer.following ? t('ctx_unfollow') : t('ctx_follow'), action: () => window.toggleFollow(n.author.did, authorViewer.following) });
-                    opts.push({ label: authorViewer.muted ? t('ctx_unmute') : t('ctx_mute'), action: () => window.toggleMute(n.author.did, authorViewer.muted) });
-                    opts.push({ label: authorViewer.blocking ? t('ctx_unblock') : t('ctx_block'), action: () => window.toggleBlock(n.author.did, authorViewer.blocking), color: '#d93025' });
+                    opts.push({ label: authorViewer.muted ? t('ctx_unmute') : t('ctx_mute'), action: () => window.toggleMute(author.did, authorViewer.muted) });
+                    opts.push({ label: authorViewer.blocking ? t('ctx_unblock') : t('ctx_block'), action: () => window.toggleBlock(author.did, authorViewer.blocking), color: '#d93025' });
                 }
-                showContextMenu(e.pageX, e.pageY, opts);
+                showContextMenu(e.clientX, e.clientY, opts);
             });
             
             let previewText = '';
@@ -636,7 +649,6 @@ window.loadThread = async (uri, isBack = false) => {
         container.innerHTML = '';
         const renderThreadItem = (item, isRoot = false) => {
             if (item.parent) renderThreadItem(item.parent);
-            // ★ スレッド内の削除ポスト参照時のクラッシュ対策
             if (item.post) container.appendChild(createPostElement(item.post, isRoot));
             if (item.replies) item.replies.forEach(reply => {
                 if (reply.post) {
@@ -665,7 +677,7 @@ window.loadProfile = async (actor, isBack = false) => {
         const p = res.data;
         
         const dmBtn = p.did !== agent.session.did ? `<button onclick="window.startDirectMessage('${p.did}')" class="sidebar-action-btn" style="width:auto; padding:5px 15px; margin-right:10px;">${t('send_dm')}</button>` : '';
-        const replyBtn = `<button onclick="window.prepareProfileReply('${p.handle}')" class="sidebar-action-btn" style="width:auto; padding:5px 15px; margin-right:10px;">${t('profile_reply')}</button>`;
+        const replyBtn = p.did !== agent.session.did ? `<button onclick="window.prepareProfileReply('${p.handle}')" class="sidebar-action-btn" style="width:auto; padding:5px 15px; margin-right:10px;">${t('profile_reply')}</button>` : '';
         const followBtn = p.did !== agent.session.did ? `<button onclick="window.toggleFollow('${p.did}', '${p.viewer?.following || ''}')" class="sidebar-action-btn" style="width:auto; padding:5px 15px; background:${p.viewer?.following ? '#ccc' : 'var(--bsky-blue)'};">${p.viewer?.following ? t('ctx_unfollow') : t('ctx_follow')}</button>` : '';
         const actionBtns = p.did !== agent.session.did ? `<div style="margin-top:15px; display:flex; gap:8px; flex-wrap:wrap;">${dmBtn}${replyBtn}${followBtn}</div>` : '';
         
@@ -877,6 +889,12 @@ function applyTranslations() {
 // イベントリスナー
 // ------------------------------------------
 document.getElementById('login-btn').addEventListener('click', login);
+
+document.getElementById('login-cancel-btn')?.addEventListener('click', () => {
+    els.loginForm.classList.add('hidden');
+    if (els.app) els.app.style.opacity = "1";
+});
+
 document.getElementById('post-btn')?.addEventListener('click', sendPost);
 
 document.getElementById('nav-home').addEventListener('click', () => { 
