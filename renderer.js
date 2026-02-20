@@ -1,7 +1,29 @@
 const { BskyAgent, RichText } = require('@atproto/api'); 
 const { ipcRenderer, shell } = require('electron');
+const fs = require('fs');
+const path = require('path');
 
-// ★ 動的に追加するカスタムCSS (SVGの色付け、スレッド線など)
+// ★ 超軽量化パッチ：SVGアイコンをメモリにキャッシュして爆速描画＆リンク切れ防止
+const iconCache = {};
+function getSvgIcon(name) {
+    if (iconCache[name] !== undefined) return iconCache[name];
+    try {
+        const filePath = path.join(__dirname, name);
+        if (fs.existsSync(filePath)) {
+            const data = fs.readFileSync(filePath, 'base64');
+            iconCache[name] = `data:image/svg+xml;base64,${data}`;
+        } else {
+            console.warn("Icon not found:", filePath);
+            iconCache[name] = ''; // ファイルがない場合は空にする
+        }
+    } catch (e) {
+        console.error("Error loading icon:", e);
+        iconCache[name] = '';
+    }
+    return iconCache[name];
+}
+
+// 動的に追加するカスタムCSS (SVGの色付け、スレッド線など)
 const customStyles = document.createElement('style');
 customStyles.innerHTML = `
     .action-icon { width: 16px; height: 16px; vertical-align: text-bottom; margin-right: 4px; opacity: 0.6; transition: all 0.2s; }
@@ -168,7 +190,6 @@ async function initApp() {
     els.imagePreviewContainer = get('image-preview-container');
     els.ctxMenu = get('ctx-menu');
 
-    // サイドバーにブックマークを動的追加
     if (!document.getElementById('nav-bookmarks')) {
         const li = document.createElement('li');
         li.id = 'nav-bookmarks';
@@ -188,7 +209,6 @@ async function initApp() {
         els.bookmarksView = bView;
     }
 
-    // 設定画面にブックマークON/OFFスイッチを動的追加
     if (els.settingsView && !document.getElementById('setting-bookmark-tab')) {
         const genHeading = els.settingsView.querySelector('h3');
         if (genHeading) {
@@ -338,7 +358,6 @@ function renderAccountList() {
     });
 }
 
-// ★ URLハイパーリンク化の強化（httpなし対応）と軽量化
 const linkifyCache = new Map();
 function linkify(text) {
     if (!text) return '';
@@ -346,7 +365,7 @@ function linkify(text) {
     
     let escaped = text.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag]));
     
-    // httpなしのドメインやURLも安全にリンク化
+    // URLのリンク化強化
     escaped = escaped.replace(/(?:https?:\/\/|www\.)[a-zA-Z0-9\-.]+\.[a-zA-Z]{2,}(?:\/[^\s]*)?|[a-zA-Z0-9\-]+\.[a-zA-Z]{2,}(?:\/[^\s]*)?/g, match => {
         if (match.includes('@') && !match.startsWith('http')) return match; 
         if (!match.includes('.') || match.length < 5) return match; 
@@ -477,7 +496,6 @@ function createPostElement(post, isThreadRoot = false, isQuoteModal = false, rea
                 if (rec.embeds && rec.embeds[0] && rec.embeds[0].$type === 'app.bsky.embed.images#view') {
                     quoteMediaHtml = `<div class="post-images" style="margin-top:8px;">` + rec.embeds[0].images.map(img => `<img src="${img.thumb}" data-fullsize="${img.fullsize}" class="${imgClass}" style="${imgStyle}" onclick="window.openModal('${img.fullsize}'); event.stopPropagation();">`).join('') + `</div>`;
                 }
-                // ★ 引用の引数渡しバグ修正：encodeURIComponent でエスケープ
                 const safeTextArg = encodeURIComponent(rec.value?.text || rec.record?.text || '');
                 embedHtml = `<div class="embedded-quote" onclick="window.openQuoteModal(event, ${JSON.stringify(rec).replace(/"/g, '&quot;')}); event.stopPropagation();"><strong>${rec.author.displayName || rec.author.handle}</strong> <span style="color:gray;">@${rec.author.handle}</span><div style="font-size:0.9em; margin-top:4px;">${linkify(rec.value?.text || rec.record?.text)}</div>${quoteMediaHtml}</div>`;
             }
@@ -504,10 +522,9 @@ function createPostElement(post, isThreadRoot = false, isQuoteModal = false, rea
     }
 
     const bookmarkCountHtml = (isMe && typeof post.bookmarkCount !== 'undefined' && post.bookmarkCount > 0) 
-        ? `<button class="action-btn bookmarked" style="cursor:default;"><img src="bookmark.svg" class="action-icon"> ${post.bookmarkCount}</button>` 
+        ? `<button class="action-btn bookmarked" style="cursor:default;"><img src="${getSvgIcon('bookmark.svg')}" class="action-icon"> ${post.bookmarkCount}</button>` 
         : '';
 
-    // ★ SVGアイコンへの置き換えと、長文引用バグの修正
     const safeQuoteText = encodeURIComponent(post.record?.text || post.value?.text || '');
     
     div.innerHTML = `
@@ -518,12 +535,12 @@ function createPostElement(post, isThreadRoot = false, isQuoteModal = false, rea
             <div class="post-text">${linkify(post.record?.text || post.value?.text)}</div>
             ${embedHtml}
             <div class="post-actions" onclick="event.stopPropagation();">
-                <button onclick="window.prepareReply('${post.uri}', '${post.cid}', '${author.handle}', '${root.uri}', '${root.cid}')" class="action-btn"><img src="reply.svg" class="action-icon"> ${post.replyCount || 0}</button>
-                <button onclick="window.doRepost('${post.uri}', '${post.cid}', ${postViewer.repost ? `'${postViewer.repost}'` : 'null'})" class="action-btn ${postViewer.repost ? 'reposted' : ''}"><img src="repost.svg" class="action-icon"> ${post.repostCount || 0}</button>
-                <button onclick="window.prepareQuote('${post.uri}', '${post.cid}', '${author.handle}', decodeURIComponent('${safeQuoteText}'))" class="action-btn"><img src="quote.svg" class="action-icon"></button>
-                <button onclick="window.doLike('${post.uri}', '${post.cid}', ${postViewer.like ? `'${postViewer.like}'` : 'null'})" class="action-btn ${postViewer.like ? 'liked' : ''}"><img src="like.svg" class="action-icon"> ${post.likeCount || 0}</button>
+                <button onclick="window.prepareReply('${post.uri}', '${post.cid}', '${author.handle}', '${root.uri}', '${root.cid}')" class="action-btn"><img src="${getSvgIcon('reply.svg')}" class="action-icon"> ${post.replyCount || 0}</button>
+                <button onclick="window.doRepost('${post.uri}', '${post.cid}', ${postViewer.repost ? `'${postViewer.repost}'` : 'null'})" class="action-btn ${postViewer.repost ? 'reposted' : ''}"><img src="${getSvgIcon('repost.svg')}" class="action-icon"> ${post.repostCount || 0}</button>
+                <button onclick="window.prepareQuote('${post.uri}', '${post.cid}', '${author.handle}', decodeURIComponent('${safeQuoteText}'))" class="action-btn"><img src="${getSvgIcon('quote.svg')}" class="action-icon"></button>
+                <button onclick="window.doLike('${post.uri}', '${post.cid}', ${postViewer.like ? `'${postViewer.like}'` : 'null'})" class="action-btn ${postViewer.like ? 'liked' : ''}"><img src="${getSvgIcon('like.svg')}" class="action-icon"> ${post.likeCount || 0}</button>
                 ${bookmarkCountHtml}
-                ${isMe ? `<button onclick="window.deletePost('${post.uri}')" class="action-btn" style="margin-left:auto;"><img src="trash.svg" class="action-icon"></button>` : ''}
+                ${isMe ? `<button onclick="window.deletePost('${post.uri}')" class="action-btn" style="margin-left:auto;"><img src="${getSvgIcon('trash.svg')}" class="action-icon"></button>` : ''}
             </div>
         </div>`;
     return div;
@@ -674,6 +691,28 @@ async function fetchBookmarks() {
     }
 }
 
+function renderPosts(posts, container) { 
+    if (!container) return; 
+    container.innerHTML = ''; 
+    const fragment = document.createDocumentFragment();
+    let prevPostUri = null;
+
+    posts.forEach(item => {
+        const post = item.post || item;
+        const el = createPostElement(post, false, false, item.reason); 
+        
+        if (item.reply && item.reply.parent && item.reply.parent.uri === prevPostUri) {
+            if (fragment.lastChild) {
+                fragment.lastChild.classList.add('thread-line');
+            }
+        }
+        
+        prevPostUri = post.uri;
+        fragment.appendChild(el);
+    }); 
+    container.appendChild(fragment);
+}
+
 function resetPostForm() {
     els.postInput.value = ''; els.postInput.placeholder = t('post_placeholder');
     els.quotePreview.classList.add('hidden'); els.quotePreview.innerHTML = '';
@@ -750,30 +789,6 @@ window.prepareProfileReply = (handle) => {
 
 async function checkNotifs() {
     try { const res = await agent.countUnreadNotifications(); els.notifBadge.classList.toggle('hidden', res.data.count === 0); } catch(e) {}
-}
-
-// ★ 軽量化：DocumentFragmentを使った一括DOM追加 ＆ スレッドの連結線付与
-function renderPosts(posts, container) { 
-    if (!container) return; 
-    container.innerHTML = ''; 
-    const fragment = document.createDocumentFragment();
-    let prevPostUri = null;
-
-    posts.forEach(item => {
-        const post = item.post || item;
-        const el = createPostElement(post, false, false, item.reason); 
-        
-        // タイムライン上で直前のポストが親ポストなら「スレッド線」を引く
-        if (item.reply && item.reply.parent && item.reply.parent.uri === prevPostUri) {
-            if (fragment.lastChild) {
-                fragment.lastChild.classList.add('thread-line');
-            }
-        }
-        
-        prevPostUri = post.uri;
-        fragment.appendChild(el);
-    }); 
-    container.appendChild(fragment);
 }
 
 async function fetchTimeline() { try { const res = await agent.getTimeline({ limit: postLimit }); renderPosts(res.data.feed, els.timelineDiv); } catch (e) {} }
@@ -961,7 +976,8 @@ async function loadModerationList(type) {
         container.innerHTML = '';
         if (items.length === 0) container.innerHTML = '<div style="padding:10px;">No accounts found.</div>';
         items.forEach(item => {
-            const div = document.createElement('div'); div.className = 'user-list-item';
+            const div = document.createElement('div');
+            div.className = 'user-list-item';
             div.innerHTML = `<div><strong>${item.name || item.handle}</strong> <span style="color:gray;">@${item.handle}</span></div><button class="sidebar-action-btn" style="width:auto; padding:4px 8px;">${type === 'blocks' ? t('ctx_unblock') : t('ctx_unmute')}</button>`;
             div.querySelector('button').onclick = () => {
                 if (type === 'blocks') window.toggleBlock(item.did, item.uri);
