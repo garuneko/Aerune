@@ -43,7 +43,6 @@ const agent = new BskyAgent({ service: 'https://bsky.social' });
 let selectedImages = [], replyTarget = null, quoteTarget = null, savedAccounts = [], currentDid = null, currentConvoId = null;
 const els = {};
 
-// ★ 履歴管理用の変数
 let historyStack = [];
 let currentState = null;
 
@@ -96,7 +95,6 @@ async function initApp() {
     els.quotePreview = get('quote-preview');
     els.imagePreviewContainer = get('image-preview-container');
 
-    // ★ ヘッダーに戻るボタンを動的に追加
     if (els.viewTitle && !document.getElementById('back-btn')) {
         const backBtn = document.createElement('button');
         backBtn.id = 'back-btn';
@@ -171,7 +169,6 @@ function setupLoggedInUI() {
         document.getElementById('profile-snippet').innerHTML = `<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;"><img src="${res.data.avatar}" style="width: 40px; height: 40px; border-radius: 50%;"><strong>${res.data.displayName || res.data.handle}</strong></div>`;
         renderAccountList();
     });
-    // ★ 起動時にホームの履歴を積む
     pushState({ type: 'home' });
     switchView('home', els.timelineDiv);
     fetchTimeline();
@@ -213,7 +210,6 @@ function createPostElement(post, isThreadRoot = false, isQuoteModal = false, rea
     div.className = 'post';
     if (isThreadRoot) div.style.borderLeft = '4px solid var(--bsky-blue)';
     
-    // ★ コピペ対策: テキスト選択中は遷移しない
     if (!isQuoteModal) {
         div.onclick = () => {
             if (window.getSelection().toString().length > 0) return;
@@ -412,15 +408,18 @@ async function fetchNotifications() {
         els.notifDiv.innerHTML = '';
         notifications.forEach(n => {
             const div = document.createElement('div'); div.className = 'post';
-            // ★ コピペ対策
-            if (n.reasonSubject || n.uri) {
-                div.onclick = () => {
-                    if (window.getSelection().toString().length > 0) return;
-                    window.loadThread(n.reasonSubject || n.uri);
-                };
-            }
             
-            // ★ 返信などの場合は相手のテキストを表示する
+            // ★ フォロー通知とそれ以外の通知で遷移先を分岐
+            div.onclick = () => {
+                if (window.getSelection().toString().length > 0) return;
+                
+                if (n.reason === 'follow') {
+                    window.loadProfile(n.author.handle);
+                } else if (n.reasonSubject || n.uri) {
+                    window.loadThread(n.reasonSubject || n.uri);
+                }
+            };
+            
             let previewText = '';
             if (n.reason === 'like' || n.reason === 'repost') {
                 previewText = postMap[n.reasonSubject] || '';
@@ -436,7 +435,6 @@ async function fetchNotifications() {
     } catch (e) {}
 }
 
-// ★ isBackフラグを追加して履歴が二重に積まれないようにする
 window.loadThread = async (uri, isBack = false) => {
     if (!isBack) pushState({ type: 'thread', uri });
     switchView('thread', els.threadView);
@@ -523,7 +521,7 @@ async function loadConvo(convoId) {
 
 window.startDirectMessage = async (did) => {
     try { 
-        pushState({ type: 'chat' }); // DM画面への移動履歴
+        pushState({ type: 'chat' });
         switchView('chat', els.chatView); 
         const profile = await agent.getProfile({ actor: did });
         els.chatHeader.innerHTML = `<img src="${profile.data.avatar || ''}" style="width:30px;height:30px;border-radius:50%;vertical-align:middle;margin-right:10px;"> <strong>${profile.data.displayName || profile.data.handle}</strong>`;
@@ -554,7 +552,7 @@ function applyTranslations() {
 }
 
 // ------------------------------------------
-// イベントリスナー (タブクリック時にも履歴を積む)
+// イベントリスナー
 // ------------------------------------------
 document.getElementById('login-btn').addEventListener('click', login);
 document.getElementById('post-btn')?.addEventListener('click', sendPost);
