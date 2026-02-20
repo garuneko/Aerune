@@ -1,0 +1,8 @@
+<!-- image-upload.svg (画像投稿) - picture + up arrow, 24x24 -->
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+     fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <rect x="3.5" y="5" width="17" height="14" rx="2.5"/>
+  <path d="M7.5 14l2.5-2.8 3.2 3.6 2.2-2.4 2.6 2.9"/>
+  <path d="M12 4.5v6"/>
+  <path d="M9.8 7l2.2-2.2L14.2 7"/>
+</svg>
