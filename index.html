@@ -20,6 +20,7 @@
                 <li id="nav-chat" data-i18n="nav_chat">チャット</li>
                 <li id="nav-search" data-i18n="nav_search">検索</li>
                 <li id="nav-profile" data-i18n="nav_profile">プロフィール</li>
+                <li id="nav-settings" data-i18n="nav_settings">設定</li>
             </ul>
             <div style="margin-top: auto;">
                 <button id="add-account-btn" class="sidebar-action-btn" data-i18n="add_account">＋ アカウント追加</button>
@@ -30,7 +31,7 @@
         <main class="content">
             <header class="content-header">
                 <h2 id="view-title" data-i18n="nav_home">Home</h2>
-                <button id="refresh-btn" class="icon-btn">🔄</button>
+                <button id="refresh-btn" class="icon-btn" style="background:none; border:none; cursor:pointer;"><img src="reload.svg" alt="reload" style="width: 20px; height: 20px; vertical-align: middle;"></button>
             </header>
             <div id="timeline"></div>
             <div id="notifications" class="hidden"></div>
@@ -53,12 +54,35 @@
                 </div>
                 <div id="search-results"></div>
             </div>
-            <div id="profile-view" class="hidden"><div id="profile-header-container"></div><div id="profile-timeline"></div></div>
+            <div id="profile-view" class="hidden">
+                <div id="profile-header-container"></div>
+                <div id="profile-pinned"></div>
+                <div id="profile-timeline"></div>
+            </div>
+            
+            <div id="settings-view" class="hidden">
+                <div style="padding: 20px;">
+                    <div style="margin-top: 10px; margin-bottom: 20px;">
+                        <label data-i18n="settings_lang" style="display:block; margin-bottom:8px; font-weight:bold;">言語 / Language</label>
+                        <select id="setting-lang" style="padding: 8px; border-radius: 5px; border: 1px solid #ccc; width: 100%; max-width: 300px;">
+                            <option value="ja">日本語</option>
+                            <option value="en">English</option>
+                        </select>
+                    </div>
+                    <div style="margin-bottom: 20px;">
+                        <label data-i18n="settings_limit" style="display:block; margin-bottom:8px; font-weight:bold;">TLや検索の読み込み件数 (10〜100)</label>
+                        <input type="number" id="setting-limit" min="10" max="100" style="padding: 8px; border-radius: 5px; border: 1px solid #ccc; width: 100px;">
+                    </div>
+                    <button id="settings-save-btn" class="sidebar-action-btn" style="width:auto; padding:8px 24px;" data-i18n="settings_save">保存</button>
+                    <div id="settings-msg" style="color: green; margin-top: 10px; font-size: 0.9em; height: 1.5em;"></div>
+                </div>
+            </div>
+
             <div id="thread-view" class="hidden"><div id="thread-content"></div></div>
             <div class="post-form-container" id="drop-zone">
                 <div id="quote-preview" class="quote-preview hidden"></div>
                 <div class="post-form-inner">
-                    <label for="image-input" class="image-label">📷</label>
+                    <label for="image-input" class="image-label" style="cursor:pointer;"><img src="image.svg" alt="image" style="width: 24px; height: 24px; vertical-align: middle;"></label>
                     <input type="file" id="image-input" accept="image/*" multiple style="display:none;">
                     <textarea id="post-input" data-i18n-placeholder="post_placeholder" rows="1"></textarea>
                     <button id="post-btn" data-i18n="send">送信</button>
