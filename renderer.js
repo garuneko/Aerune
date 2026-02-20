@@ -32,7 +32,7 @@ const translations = {
     }
 };
 
-let currentLang = localStorage.getItem('aerune_lang') || 'ja';
+let currentLang = localStorage.getItem('aerune_lang') || (navigator.language.startsWith('ja') ? 'ja' : 'en');
 const t = (key, ...args) => {
     let text = translations[currentLang][key] || key;
     args.forEach((arg, i) => { text = text.replace(`{${i}}`, arg); });
