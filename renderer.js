@@ -3,22 +3,29 @@ const { ipcRenderer, shell } = require('electron');
 const fs = require('fs');
 const path = require('path');
 
-// ★ 超軽量化パッチ：SVGアイコンをメモリにキャッシュして爆速描画＆リンク切れ防止
+// ★ 修正：Electronのscriptタグ内でも確実に現在フォルダを取得するパッチ
+let basePath = decodeURI(window.location.pathname);
+if (navigator.userAgent.includes('Win') && basePath.startsWith('/')) {
+    basePath = basePath.substring(1); // Windowsの場合の先頭スラッシュを削除
+}
+basePath = path.dirname(basePath);
+
+// SVGアイコンをメモリにキャッシュして爆速描画＆リンク切れ防止
 const iconCache = {};
 function getSvgIcon(name) {
     if (iconCache[name] !== undefined) return iconCache[name];
     try {
-        const filePath = path.join(__dirname, name);
+        const filePath = path.join(basePath, name);
         if (fs.existsSync(filePath)) {
             const data = fs.readFileSync(filePath, 'base64');
             iconCache[name] = `data:image/svg+xml;base64,${data}`;
         } else {
             console.warn("Icon not found:", filePath);
-            iconCache[name] = ''; // ファイルがない場合は空にする
+            iconCache[name] = name; // 見つからない場合は通常のファイル名にフォールバック
         }
     } catch (e) {
         console.error("Error loading icon:", e);
-        iconCache[name] = '';
+        iconCache[name] = name;
     }
     return iconCache[name];
 }
@@ -358,6 +365,7 @@ function renderAccountList() {
     });
 }
 
+// URLリンク化
 const linkifyCache = new Map();
 function linkify(text) {
     if (!text) return '';
@@ -365,7 +373,6 @@ function linkify(text) {
     
     let escaped = text.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag]));
     
-    // URLのリンク化強化
     escaped = escaped.replace(/(?:https?:\/\/|www\.)[a-zA-Z0-9\-.]+\.[a-zA-Z]{2,}(?:\/[^\s]*)?|[a-zA-Z0-9\-]+\.[a-zA-Z]{2,}(?:\/[^\s]*)?/g, match => {
         if (match.includes('@') && !match.startsWith('http')) return match; 
         if (!match.includes('.') || match.length < 5) return match; 
@@ -521,9 +528,10 @@ function createPostElement(post, isThreadRoot = false, isQuoteModal = false, rea
         repostHtml = `<div style="font-size: 0.85em; color: gray; margin-bottom: 4px; font-weight: bold;">${t('reposted_by', reposterName)}</div>`;
     }
 
+    const isBookmarkedLocally = window.aeruneBookmarks.has(post.uri) || !!(post.viewer && post.viewer.bookmark);
     const bookmarkCountHtml = (isMe && typeof post.bookmarkCount !== 'undefined' && post.bookmarkCount > 0) 
         ? `<button class="action-btn bookmarked" style="cursor:default;"><img src="${getSvgIcon('bookmark.svg')}" class="action-icon"> ${post.bookmarkCount}</button>` 
-        : '';
+        : (isBookmarkedLocally && !isMe ? `<button class="action-btn bookmarked" style="cursor:default;"><img src="${getSvgIcon('bookmark.svg')}" class="action-icon"></button>` : '');
 
     const safeQuoteText = encodeURIComponent(post.record?.text || post.value?.text || '');
     
