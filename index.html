@@ -124,13 +124,16 @@
         </main>
     </div>
     <div id="login-form" class="hidden">
-        <div class="login-box">
-            <img src="Aerunelogo.png" style="width: 80px; margin: 0 auto 10px; display: block; border-radius: 12px;">
-            <h2 style="text-align: center;" data-i18n="login_title">ログイン</h2>
-            <input type="text" id="id" data-i18n-placeholder="login_id"><input type="password" id="pw" data-i18n-placeholder="login_pw">
-            <button id="login-btn" data-i18n="login_btn">ログイン</button>
-        </div>
+<div class="login-box">
+    <img src="Aerunelogo.png" style="width: 80px; margin: 0 auto 10px; display: block; border-radius: 12px;">
+    <h2 style="text-align: center;" data-i18n="login_title">ログイン</h2>
+    <input type="text" id="id" data-i18n-placeholder="login_id">
+    <input type="password" id="pw" data-i18n-placeholder="login_pw">
+    <div style="display: flex; gap: 10px; margin-top: 10px;">
+        <button id="login-btn" style="flex: 1;" data-i18n="login_btn">ログイン</button>
+        <button id="login-cancel-btn" style="flex: 1; background: #ccc; color: #333;" data-i18n="cancel">キャンセル</button>
     </div>
+</div>
     <div id="image-modal" class="hidden"><span id="modal-close">&times;</span><img id="modal-image" src=""></div>
     <div id="quote-modal" class="hidden"><div class="modal-content"><span id="quote-modal-close" class="modal-close-btn">&times;</span><div id="quote-modal-body"></div></div></div>
     
