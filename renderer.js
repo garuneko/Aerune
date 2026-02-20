@@ -54,6 +54,7 @@ const translations = {
 
 let currentLang = localStorage.getItem('aerune_lang') || (navigator.language.startsWith('ja') ? 'ja' : 'en');
 let postLimit = parseInt(localStorage.getItem('aerune_post_limit')) || 30;
+if (isNaN(postLimit)) postLimit = 30;
 let nsfwBlur = localStorage.getItem('aerune_nsfw_blur') !== 'false';
 
 const t = (key, ...args) => {
@@ -181,7 +182,14 @@ async function login() {
             await ipcRenderer.invoke('save-session', savedAccounts);
             await switchAccount(res.data.did);
         }
-    } catch (e) { alert(t('login_failed')); } finally { btn.disabled = false; btn.innerText = t('login_btn'); }
+    } catch (e) {
+        // ★ エラー理由の詳細表示パッチ
+        console.error("Login Error:", e);
+        alert(`${t('login_failed')}\nReason: ${e.message || String(e)}`);
+    } finally { 
+        btn.disabled = false; 
+        btn.innerText = t('login_btn'); 
+    }
 }
 
 async function switchAccount(did) {
@@ -278,7 +286,8 @@ async function downloadImage(url) {
 }
 
 function createPostElement(post, isThreadRoot = false, isQuoteModal = false, reason = null) {
-    // ★ authorViewer（ユーザー関係性）と postViewer（ポストへのアクション）を正しく分離
+    if (!post || !post.author) return document.createElement('div'); 
+
     const author = post.author, postViewer = post.viewer || {}, authorViewer = author.viewer || {}, root = post.record?.reply?.root || { uri: post.uri, cid: post.cid };
     const div = document.createElement('div');
     div.className = 'post';
@@ -293,7 +302,8 @@ function createPostElement(post, isThreadRoot = false, isQuoteModal = false, rea
             e.preventDefault(); e.stopPropagation();
             if (window.getSelection().toString().length > 0) return;
 
-            if (e.target.tagName === 'IMG' && e.target.classList.contains('post-img-thumb')) {
+            // ★ 画像であれば全て「画像保存」を出すように修正（クラス縛り解除）
+            if (e.target.tagName === 'IMG') {
                 showContextMenu(e.pageX, e.pageY, [
                     { label: t('save_image'), action: () => downloadImage(e.target.dataset.fullsize || e.target.src) }
                 ]);
@@ -314,7 +324,6 @@ function createPostElement(post, isThreadRoot = false, isQuoteModal = false, rea
                 opts.push({ label: t('ctx_pin') + "/" + t('ctx_unpin'), action: () => window.togglePin(post) });
             } else {
                 opts.push({ divider: true });
-                // ★ 正しい関係性データ（authorViewer）を参照するように修正
                 opts.push({ label: authorViewer.following ? t('ctx_unfollow') : t('ctx_follow'), action: () => window.toggleFollow(author.did, authorViewer.following) });
                 opts.push({ label: authorViewer.muted ? t('ctx_unmute') : t('ctx_mute'), action: () => window.toggleMute(author.did, authorViewer.muted) });
                 opts.push({ label: authorViewer.blocking ? t('ctx_unblock') : t('ctx_block'), action: () => window.toggleBlock(author.did, authorViewer.blocking), color: '#d93025' });
@@ -499,7 +508,7 @@ function updateImagePreview() {
         const wrap = document.createElement('div');
         wrap.className = 'img-preview-wrap';
         wrap.innerHTML = `
-            <img src="${imgObj.url}">
+            <img src="${imgObj.url}" title="クリックで削除" style="cursor: pointer;" onclick="window.removeImg(${index}); event.stopPropagation();">
             <div class="img-controls">
                 <button onclick="window.moveImg(${index}, -1); event.stopPropagation();" ${index === 0 ? 'disabled' : ''}>◀</button>
                 <input type="text" placeholder="ALT" value="${imgObj.alt}" onchange="window.updateAlt(${index}, this.value)" onclick="event.stopPropagation();">
@@ -529,7 +538,9 @@ window.prepareReply = (uri, cid, handle, rootUri, rootCid) => {
 window.prepareQuote = (uri, cid, handle, text) => {
     quoteTarget = { uri, cid };
     els.quotePreview.classList.remove('hidden');
-    els.quotePreview.innerHTML = `<span class="quote-preview-close" onclick="resetPostForm()">×</span><strong>@${handle}</strong>: ${text.substring(0, 60)}...`;
+    // ★ HTMLエスケープによるXSS対策パッチ
+    const safeText = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    els.quotePreview.innerHTML = `<span class="quote-preview-close" onclick="resetPostForm()">×</span><strong>@${handle}</strong>: ${safeText.substring(0, 60)}...`;
     els.postInput.focus();
 };
 
@@ -573,10 +584,17 @@ async function fetchNotifications() {
                 else if (n.reasonSubject || n.uri) window.loadThread(n.reasonSubject || n.uri);
             };
 
-            // ★ 通知欄での右クリックメニュー
             div.addEventListener('contextmenu', (e) => {
                 e.preventDefault(); e.stopPropagation();
                 if (window.getSelection().toString().length > 0) return;
+
+                // ★ 通知欄でも画像保存メニューを適用
+                if (e.target.tagName === 'IMG') {
+                    showContextMenu(e.pageX, e.pageY, [
+                        { label: t('save_image'), action: () => downloadImage(e.target.dataset.fullsize || e.target.src) }
+                    ]);
+                    return;
+                }
 
                 const authorViewer = n.author.viewer || {};
                 const isMe = n.author.did === agent.session.did;
@@ -618,10 +636,13 @@ window.loadThread = async (uri, isBack = false) => {
         container.innerHTML = '';
         const renderThreadItem = (item, isRoot = false) => {
             if (item.parent) renderThreadItem(item.parent);
-            container.appendChild(createPostElement(item.post, isRoot));
+            // ★ スレッド内の削除ポスト参照時のクラッシュ対策
+            if (item.post) container.appendChild(createPostElement(item.post, isRoot));
             if (item.replies) item.replies.forEach(reply => {
-                const el = createPostElement(reply.post); el.style.marginLeft = '40px'; el.style.borderLeft = '2px solid #eee';
-                container.appendChild(el);
+                if (reply.post) {
+                    const el = createPostElement(reply.post); el.style.marginLeft = '40px'; el.style.borderLeft = '2px solid #eee';
+                    container.appendChild(el);
+                }
             });
         };
         renderThreadItem(res.data.thread, true);
@@ -650,7 +671,28 @@ window.loadProfile = async (actor, isBack = false) => {
         
         const rel = p.viewer?.following && p.viewer?.followedBy ? `<span class="relationship-badge">${t('mutual')}</span>` : (p.viewer?.following ? `<span class="relationship-badge">${t('following')}</span>` : (p.viewer?.followedBy ? `<span class="relationship-badge">${t('follow_me')}</span>` : ''));
         
-        container.innerHTML = `<img src="${p.banner || ''}" style="width:100%; height:150px; object-fit:cover;"><div style="padding:20px; position:relative;"><img src="${p.avatar || ''}" style="width:80px; height:80px; border-radius:50%; border:4px solid white; position:absolute; top:-40px;"><div style="margin-top:40px;"><div style="font-size:20px; font-weight:bold;">${p.displayName || p.handle}${rel}</div><div style="color:gray;">@${p.handle}</div><div style="margin-top:10px; word-break: break-word;">${linkify(p.description || '')}</div>${actionBtns}</div></div>`;
+        const bannerHtml = p.banner ? `<img src="${p.banner}" style="width:100%; height:150px; object-fit:cover;">` : `<div style="width:100%; height:150px; background:#ddd;"></div>`;
+        
+        const statsHtml = `
+            <div style="display:flex; gap:20px; margin-top:15px; border-top:1px solid #eee; padding-top:10px; font-size:0.95em;">
+                <span><strong>${p.postsCount || 0}</strong> <span style="color:gray;">${t('stats_posts')}</span></span>
+                <span style="cursor:pointer;" onclick="shell.openExternal('https://bsky.app/profile/${p.handle}/follows')"><strong>${p.followsCount || 0}</strong> <span style="color:gray;">${t('stats_following')}</span></span>
+                <span style="cursor:pointer;" onclick="shell.openExternal('https://bsky.app/profile/${p.handle}/followers')"><strong>${p.followersCount || 0}</strong> <span style="color:gray;">${t('stats_followers')}</span></span>
+            </div>
+        `;
+
+        container.innerHTML = `
+            ${bannerHtml}
+            <div style="padding:20px; position:relative;">
+                <img src="${p.avatar || ''}" style="width:80px; height:80px; border-radius:50%; border:4px solid white; position:absolute; top:-40px; background:#eee;">
+                <div style="margin-top:40px;">
+                    <div style="font-size:20px; font-weight:bold;">${p.displayName || p.handle}${rel}</div>
+                    <div style="color:gray;">@${p.handle}</div>
+                    <div style="margin-top:10px; word-break: break-word;">${linkify(p.description || '')}</div>
+                    ${statsHtml}
+                    ${actionBtns}
+                </div>
+            </div>`;
         
         const feedRes = await agent.getAuthorFeed({ actor, limit: postLimit });
         let feedItems = feedRes.data.feed;
