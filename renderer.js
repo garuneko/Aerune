@@ -1,51 +1,47 @@
 const { BskyAgent, RichText } = require('@atproto/api'); 
 const { ipcRenderer, shell } = require('electron');
-const fs = require('fs');
-const path = require('path');
 
-// ★ 修正：Electronのscriptタグ内でも確実に現在フォルダを取得するパッチ
-let basePath = decodeURI(window.location.pathname);
-if (navigator.userAgent.includes('Win') && basePath.startsWith('/')) {
-    basePath = basePath.substring(1); // Windowsの場合の先頭スラッシュを削除
-}
-basePath = path.dirname(basePath);
+// ★ 外部ファイル読み込み完全廃止
+const SVG_ICONS = {
+    repost: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M7 8H16 A3 3 0 0 1 19 11V13M19 13l-1.6-1.6M19 13l1.6-1.6M17 16H8 A3 3 0 0 1 5 13V11M5 11l1.6 1.6M5 11l-1.6 1.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+    reply: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 9L6 12l4 3M7 12h7c4 0 6 2 7 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+    refresh: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 12a8 8 0 0 1-13.657 5.657M4 12a8 8 0 0 1 13.657-5.657M18 4v4h-4M6 20v-4h4" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+    pin: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g transform="rotate(-25 12 12)"><circle cx="12" cy="6.6" r="3.6" fill="#3b82f6" stroke="#1d4ed8" stroke-width="1.6"/><path d="M9.5 9.6h5l-1.1 4.7H10.6L9.5 9.6zM12 14.3 L12 22.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></g></svg>`,
+    like: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10.94,20.38c.19-.16.39-.31.6-.43,5.1-4.63,8.46-7.7,8.46-11.46,0-2.5-2-4.5-4.5-4.5-1.74,0-3.41.81-4.5,2.09-1.09-1.28-2.76-2.09-4.5-2.09-2.5,0-4.5,2-4.5,4.5,0,3.78,3.4,6.86,8.55,11.53l.39.35Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>`,
+    trash: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 7h16M10 11v7M14 11v7M6 7l1 14h10l1-14M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1-1v2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+    quote: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2zM13 8l-3 3 3 3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+    bookmark: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+    image: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><path d="M7.5 14l2.5-2.8 3.2 3.6 2.2-2.4 2.6 2.9"/><path d="M12 4.5v6"/><path d="M9.8 7l2.2-2.2L14.2 7"/></svg>`
+};
 
-// SVGアイコンをメモリにキャッシュして爆速描画＆リンク切れ防止
-const iconCache = {};
-function getSvgIcon(name) {
-    if (iconCache[name] !== undefined) return iconCache[name];
-    try {
-        const filePath = path.join(basePath, name);
-        if (fs.existsSync(filePath)) {
-            const data = fs.readFileSync(filePath, 'base64');
-            iconCache[name] = `data:image/svg+xml;base64,${data}`;
-        } else {
-            console.warn("Icon not found:", filePath);
-            iconCache[name] = name; // 見つからない場合は通常のファイル名にフォールバック
-        }
-    } catch (e) {
-        console.error("Error loading icon:", e);
-        iconCache[name] = name;
-    }
-    return iconCache[name];
+function getIcon(key) {
+    return `<span class="svg-icon">${SVG_ICONS[key] || ''}</span>`;
 }
 
-// 動的に追加するカスタムCSS (SVGの色付け、スレッド線など)
 const customStyles = document.createElement('style');
 customStyles.innerHTML = `
-    .action-icon { width: 16px; height: 16px; vertical-align: text-bottom; margin-right: 4px; opacity: 0.6; transition: all 0.2s; }
-    .action-btn:hover .action-icon { opacity: 1; transform: scale(1.1); }
-    /* いいね済みの赤色フィルタ */
-    .action-btn.liked .action-icon { filter: invert(27%) sepia(91%) saturate(3023%) hue-rotate(336deg) brightness(91%) contrast(96%); opacity: 1; }
-    /* リポスト済みの緑色フィルタ */
-    .action-btn.reposted .action-icon { filter: invert(53%) sepia(86%) saturate(417%) hue-rotate(99deg) brightness(96%) contrast(89%); opacity: 1; }
-    /* ブックマークの青色フィルタ */
-    .action-btn.bookmarked .action-icon { filter: invert(41%) sepia(92%) saturate(3027%) hue-rotate(194deg) brightness(101%) contrast(106%); opacity: 1; }
+    .svg-icon { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; min-width: 18px; flex-shrink: 0; vertical-align: middle; margin-right: 4px; opacity: 0.6; transition: all 0.2s; }
+    .svg-icon svg { width: 100%; height: 100%; display: block; }
+    .action-btn { display: inline-flex; align-items: center; background: transparent; border: none; cursor: pointer; padding: 4px 8px; color: gray; font-size: 0.9em; }
+    .action-btn:hover .svg-icon { opacity: 1; transform: scale(1.1); }
     
-    /* スレッド連結線 */
+    .action-btn.liked { color: #e0245e !important; }
+    .action-btn.liked .svg-icon { opacity: 1; color: #e0245e; }
+    .action-btn.liked .svg-icon svg path { fill: #e0245e !important; stroke: #e0245e !important; }
+    
+    .action-btn.reposted { color: #17bf63 !important; }
+    .action-btn.reposted .svg-icon { opacity: 1; color: #17bf63; }
+    .action-btn.reposted .svg-icon svg path { stroke: #17bf63 !important; }
+    
+    .action-btn.bookmarked { color: var(--bsky-blue) !important; }
+    .action-btn.bookmarked .svg-icon { opacity: 1; color: var(--bsky-blue); }
+    .action-btn.bookmarked .svg-icon svg path { fill: var(--bsky-blue) !important; stroke: var(--bsky-blue) !important; }
+    
+    .ctx-menu-item .svg-icon { width: 16px; height: 16px; min-width: 16px; flex-shrink: 0; margin-right: 8px; margin-bottom: 2px; opacity: 1; }
+
     .thread-line { position: relative; }
     .thread-line::before {
-        content: ''; position: absolute; left: 44px; top: 65px; bottom: -15px;
+        content: ''; position: absolute; left: 38px; top: 62px; bottom: -12px;
         width: 2px; background: #e5e7eb; z-index: 1;
     }
 `;
@@ -70,12 +66,12 @@ const translations = {
         settings_nsfw: "NSFW画像にぼかしを入れる", settings_mutes: "ミュート中のアカウント", settings_blocks: "ブロック中のアカウント",
         settings_bookmark_tab: "サイドバーにブックマークを表示する",
         pinned_post: "固定されたポスト",
-        ctx_reply: "💬 返信", ctx_repost: "🔁 リポスト", ctx_quote: "📝 引用", ctx_profile: "👤 プロフィールを見る",
-        ctx_pin: "📌 固定ポストに設定", ctx_unpin: "📌 固定ポストを解除",
-        ctx_follow: "➕ フォロー", ctx_unfollow: "➖ フォロー解除",
-        ctx_mute: "🔇 ミュート", ctx_unmute: "🔊 ミュート解除",
-        ctx_block: "🚫 ブロック", ctx_unblock: "✅ ブロック解除",
-        ctx_bookmark: "🔖 ブックマークに追加", ctx_unbookmark: "🔖 ブックマークを外す",
+        ctx_reply: "返信", ctx_repost: "リポスト", ctx_quote: "引用", ctx_profile: "プロフィールを見る",
+        ctx_pin: "固定ポストに設定", ctx_unpin: "固定ポストを解除",
+        ctx_follow: "フォロー", ctx_unfollow: "フォロー解除",
+        ctx_mute: "ミュート", ctx_unmute: "ミュート解除",
+        ctx_block: "ブロック", ctx_unblock: "ブロック解除",
+        ctx_bookmark: "ブックマークに追加", ctx_unbookmark: "ブックマークを外す",
         save_image: "💾 画像を保存", action_success: "完了しました",
         stats_posts: "ポスト", stats_following: "フォロー", stats_followers: "フォロワー",
         error_details: "【詳細なエラー理由】", network_check: "ネットワーク制限の可能性があります。ブラウザで原因を確認しますか？",
@@ -101,12 +97,12 @@ const translations = {
         settings_nsfw: "Blur NSFW Images", settings_mutes: "Muted Accounts", settings_blocks: "Blocked Accounts",
         settings_bookmark_tab: "Show Bookmarks in sidebar",
         pinned_post: "Pinned Post",
-        ctx_reply: "💬 Reply", ctx_repost: "🔁 Repost", ctx_quote: "📝 Quote", ctx_profile: "👤 View Profile",
-        ctx_pin: "📌 Pin Post", ctx_unpin: "📌 Unpin Post",
-        ctx_follow: "➕ Follow", ctx_unfollow: "➖ Unfollow",
-        ctx_mute: "🔇 Mute", ctx_unmute: "🔊 Unmute",
-        ctx_block: "🚫 Block", ctx_unblock: "✅ Unblock",
-        ctx_bookmark: "🔖 Add to Bookmarks", ctx_unbookmark: "🔖 Remove Bookmark",
+        ctx_reply: "Reply", ctx_repost: "Repost", ctx_quote: "Quote", ctx_profile: "View Profile",
+        ctx_pin: "Pin Post", ctx_unpin: "Unpin Post",
+        ctx_follow: "Follow", ctx_unfollow: "Unfollow",
+        ctx_mute: "Mute", ctx_unmute: "Unmute",
+        ctx_block: "Block", ctx_unblock: "Unblock",
+        ctx_bookmark: "Add to Bookmarks", ctx_unbookmark: "Remove Bookmark",
         save_image: "💾 Save Image", action_success: "Success",
         stats_posts: "Posts", stats_following: "Following", stats_followers: "Followers",
         error_details: "[Error Details]", network_check: "Possible network restriction. Would you like to check in your browser?",
@@ -196,6 +192,56 @@ async function initApp() {
     els.quotePreview = get('quote-preview');
     els.imagePreviewContainer = get('image-preview-container');
     els.ctxMenu = get('ctx-menu');
+    els.refreshBtn = get('refresh-btn');
+
+    document.querySelectorAll('img[alt="reload"], img[src*="reload"], img[src*="refresh"]').forEach(img => {
+        const btnSpan = document.createElement('span');
+        btnSpan.id = img.id || 'refresh-btn-auto';
+        btnSpan.className = img.className || 'icon-btn';
+        btnSpan.innerHTML = getIcon('refresh');
+        btnSpan.style.cursor = 'pointer';
+        img.replaceWith(btnSpan);
+        
+        btnSpan.addEventListener('click', () => { 
+            if (!els.timelineDiv.classList.contains('hidden')) fetchTimeline(); 
+            else if (!els.notifDiv.classList.contains('hidden')) fetchNotifications(); 
+            else if (!els.chatView.classList.contains('hidden')) fetchConvos(); 
+            else if (els.bookmarksView && !els.bookmarksView.classList.contains('hidden')) fetchBookmarks(); 
+        });
+    });
+
+    if (els.refreshBtn && els.refreshBtn.tagName === 'IMG') {
+        const btnSpan = document.createElement('span');
+        btnSpan.id = 'refresh-btn';
+        btnSpan.className = els.refreshBtn.className || 'icon-btn';
+        btnSpan.innerHTML = getIcon('refresh');
+        btnSpan.style.cursor = 'pointer';
+        els.refreshBtn.replaceWith(btnSpan);
+        els.refreshBtn = btnSpan;
+        els.refreshBtn.addEventListener('click', () => { 
+            if (!els.timelineDiv.classList.contains('hidden')) fetchTimeline(); 
+            else if (!els.notifDiv.classList.contains('hidden')) fetchNotifications(); 
+            else if (!els.chatView.classList.contains('hidden')) fetchConvos(); 
+            else if (els.bookmarksView && !els.bookmarksView.classList.contains('hidden')) fetchBookmarks(); 
+        });
+    } else if (els.refreshBtn) {
+        els.refreshBtn.innerHTML = getIcon('refresh');
+    }
+
+    document.querySelectorAll('img').forEach(img => {
+        if (img.src && img.src.includes('image.svg')) {
+            const btnSpan = document.createElement('span');
+            btnSpan.id = img.id || 'image-upload-btn';
+            btnSpan.className = img.className || 'icon-btn';
+            btnSpan.innerHTML = getIcon('image');
+            btnSpan.style.cursor = 'pointer';
+            img.replaceWith(btnSpan);
+            
+            btnSpan.addEventListener('click', () => {
+                document.getElementById('image-input')?.click();
+            });
+        }
+    });
 
     if (!document.getElementById('nav-bookmarks')) {
         const li = document.createElement('li');
@@ -204,7 +250,6 @@ async function initApp() {
         li.innerText = t('nav_bookmarks');
         li.onclick = () => { pushState({ type: 'bookmarks' }); switchView('bookmarks', els.bookmarksView); fetchBookmarks(); };
         li.style.display = showBookmarksConfig ? 'block' : 'none';
-        
         const profileNav = document.getElementById('nav-profile');
         if (profileNav) profileNav.parentNode.insertBefore(li, profileNav.nextSibling);
         
@@ -221,12 +266,7 @@ async function initApp() {
         if (genHeading) {
             const bmDiv = document.createElement('div');
             bmDiv.style.marginBottom = '20px';
-            bmDiv.innerHTML = `
-                <label style="display:flex; align-items:center; font-weight:bold; cursor:pointer;">
-                    <input type="checkbox" id="setting-bookmark-tab" style="margin-right:8px; width:18px; height:18px;" ${showBookmarksConfig ? 'checked' : ''}>
-                    <span data-i18n="settings_bookmark_tab">${t('settings_bookmark_tab')}</span>
-                </label>
-            `;
+            bmDiv.innerHTML = `<label style="display:flex; align-items:center; font-weight:bold; cursor:pointer;"><input type="checkbox" id="setting-bookmark-tab" style="margin-right:8px; width:18px; height:18px;" ${showBookmarksConfig ? 'checked' : ''}><span data-i18n="settings_bookmark_tab">${t('settings_bookmark_tab')}</span></label>`;
             genHeading.nextElementSibling.parentNode.insertBefore(bmDiv, genHeading.nextElementSibling.nextElementSibling.nextElementSibling);
         }
     }
@@ -255,6 +295,17 @@ async function initApp() {
     document.getElementById('setting-nsfw').checked = nsfwBlur;
 
     applyTranslations();
+
+    document.querySelectorAll('[data-i18n="settings_mutes"]').forEach(el => {
+        el.style.cursor = 'pointer';
+        el.style.color = 'var(--bsky-blue)';
+        el.onclick = () => window.showMutes();
+    });
+    document.querySelectorAll('[data-i18n="settings_blocks"]').forEach(el => {
+        el.style.cursor = 'pointer';
+        el.style.color = 'var(--bsky-blue)';
+        el.onclick = () => window.showBlocks();
+    });
 
     if (els.dropZone) {
         els.dropZone.addEventListener('dragover', (e) => { e.preventDefault(); e.stopPropagation(); els.dropZone.classList.add('drag-over'); });
@@ -365,30 +416,19 @@ function renderAccountList() {
     });
 }
 
-// URLリンク化
 const linkifyCache = new Map();
 function linkify(text) {
     if (!text) return '';
     if (linkifyCache.has(text)) return linkifyCache.get(text);
-    
     let escaped = text.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag]));
-    
     escaped = escaped.replace(/(?:https?:\/\/|www\.)[a-zA-Z0-9\-.]+\.[a-zA-Z]{2,}(?:\/[^\s]*)?|[a-zA-Z0-9\-]+\.[a-zA-Z]{2,}(?:\/[^\s]*)?/g, match => {
         if (match.includes('@') && !match.startsWith('http')) return match; 
         if (!match.includes('.') || match.length < 5) return match; 
-        let url = match;
-        if (!url.startsWith('http')) url = 'https://' + url;
-        
-        const lastChar = url.slice(-1);
-        let punctuation = '';
-        if (/[.,;!?)]/.test(lastChar)) {
-            url = url.slice(0, -1);
-            punctuation = lastChar;
-            match = match.slice(0, -1);
-        }
+        let url = match; if (!url.startsWith('http')) url = 'https://' + url;
+        const lastChar = url.slice(-1); let punctuation = '';
+        if (/[.,;!?)]/.test(lastChar)) { url = url.slice(0, -1); punctuation = lastChar; match = match.slice(0, -1); }
         return `<a href="#" onclick="shell.openExternal('${url}'); event.stopPropagation(); return false;" style="color: var(--bsky-blue); text-decoration: none;">${match}</a>${punctuation}`;
     });
-
     escaped = escaped.replace(/(?:^|\s)(#[^\s#]+)/g, (match, tag) => {
         const space = match.startsWith(' ') ? ' ' : '';
         return `${space}<a href="#" onclick="window.execSearch('${tag.trim()}'); event.stopPropagation(); return false;" style="color: var(--bsky-blue); text-decoration: none;">${tag}</a>`;
@@ -398,10 +438,32 @@ function linkify(text) {
         const cleanHandle = handle.trim().substring(1);
         return `${space}<a href="#" onclick="window.loadProfile('${cleanHandle}'); event.stopPropagation(); return false;" style="color: var(--bsky-blue); text-decoration: none;">${handle.trim()}</a>`;
     });
-    
     if (linkifyCache.size > 500) linkifyCache.clear();
     linkifyCache.set(text, escaped);
     return escaped;
+}
+
+function renderRichText(record) {
+    if (!record || !record.text) return '';
+    if (record.facets && record.facets.length > 0) {
+        const rt = new RichText({ text: record.text, facets: record.facets });
+        let html = '';
+        for (const segment of rt.segments()) {
+            let text = segment.text.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag]));
+            if (segment.isLink()) {
+                html += `<a href="#" onclick="shell.openExternal('${segment.link.uri}'); event.stopPropagation(); return false;" style="color: var(--bsky-blue); text-decoration: none;">${text}</a>`;
+            } else if (segment.isMention()) {
+                html += `<a href="#" onclick="window.loadProfile('${segment.mention.did}'); event.stopPropagation(); return false;" style="color: var(--bsky-blue); text-decoration: none;">${text}</a>`;
+            } else if (segment.isTag()) {
+                html += `<a href="#" onclick="window.execSearch('${segment.tag.tag}'); event.stopPropagation(); return false;" style="color: var(--bsky-blue); text-decoration: none;">${text}</a>`;
+            } else {
+                html += text.replace(/\n/g, '<br>');
+            }
+        }
+        return html;
+    } else {
+        return linkify(record.text).replace(/\n/g, '<br>');
+    }
 }
 
 function showContextMenu(x, y, items) {
@@ -414,7 +476,7 @@ function showContextMenu(x, y, items) {
         } else {
             const div = document.createElement('div'); div.className = 'ctx-menu-item';
             if (item.color) div.style.color = item.color;
-            div.innerText = item.label;
+            div.innerHTML = item.label; 
             div.onclick = (e) => { e.stopPropagation(); els.ctxMenu.classList.add('hidden'); item.action(); };
             els.ctxMenu.appendChild(div);
         }
@@ -442,6 +504,37 @@ async function downloadImage(url) {
     } catch(e) { alert('Download failed'); }
 }
 
+window.toggleFollow = async (did, followingUri) => {
+    try {
+        if (followingUri && followingUri !== 'undefined' && followingUri !== '') await agent.deleteFollow(followingUri);
+        else await agent.follow(did);
+        alert(t('action_success'));
+        if (currentState?.type === 'profile') window.loadProfile(did, true);
+        else fetchTimeline();
+    } catch(e) { alert("Failed: " + e.message); }
+};
+
+window.toggleMute = async (did, isMuted) => {
+    try {
+        if (isMuted && isMuted !== 'false' && isMuted !== 'undefined' && isMuted !== '') await agent.unmute(did);
+        else await agent.mute(did);
+        alert(t('action_success'));
+    } catch(e) { alert("Failed: " + e.message); }
+};
+
+window.toggleBlock = async (did, blockingUri) => {
+    try {
+        if (blockingUri && blockingUri !== 'undefined' && blockingUri !== '') {
+            const repo = agent.session.did;
+            const rkey = blockingUri.split('/').pop();
+            await agent.com.atproto.repo.deleteRecord({ repo, collection: 'app.bsky.graph.block', rkey });
+        } else {
+            await agent.app.bsky.graph.block.create({ repo: agent.session.did }, { subject: did, createdAt: new Date().toISOString() });
+        }
+        alert(t('action_success'));
+    } catch(e) { alert("Failed: " + e.message); }
+};
+
 function createPostElement(post, isThreadRoot = false, isQuoteModal = false, reason = null) {
     if (!post || !post.author) return document.createElement('div'); 
     const author = post.author, postViewer = post.viewer || {}, authorViewer = author.viewer || {}, root = post.record?.reply?.root || { uri: post.uri, cid: post.cid };
@@ -450,6 +543,9 @@ function createPostElement(post, isThreadRoot = false, isQuoteModal = false, rea
     if (isThreadRoot) div.style.borderLeft = '4px solid var(--bsky-blue)';
     
     const isMe = agent.session && author.did === agent.session.did;
+
+    const rawQuoteText = post.record?.text || post.value?.text || '';
+    const safeQuoteText = rawQuoteText.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;').replace(/\n/g, '\\n');
 
     if (!isQuoteModal) {
         div.ondblclick = () => {
@@ -464,10 +560,11 @@ function createPostElement(post, isThreadRoot = false, isQuoteModal = false, rea
                 return;
             }
             const isBookmarkedLocally = window.aeruneBookmarks.has(post.uri) || !!postViewer.bookmark;
+            
             let opts = [
                 { label: t('ctx_reply'), action: () => window.prepareReply(post.uri, post.cid, author.handle, root.uri, root.cid) },
                 { label: t('ctx_repost'), action: () => window.doRepost(post.uri, post.cid, postViewer.repost) },
-                { label: t('ctx_quote'), action: () => window.prepareQuote(post.uri, post.cid, author.handle, post.record?.text || '') },
+                { label: t('ctx_quote'), action: () => window.prepareQuote(post.uri, post.cid, author.handle, safeQuoteText) },
                 { divider: true },
                 { label: isBookmarkedLocally ? t('ctx_unbookmark') : t('ctx_bookmark'), action: () => window.toggleBookmark(post) },
                 { divider: true },
@@ -503,8 +600,7 @@ function createPostElement(post, isThreadRoot = false, isQuoteModal = false, rea
                 if (rec.embeds && rec.embeds[0] && rec.embeds[0].$type === 'app.bsky.embed.images#view') {
                     quoteMediaHtml = `<div class="post-images" style="margin-top:8px;">` + rec.embeds[0].images.map(img => `<img src="${img.thumb}" data-fullsize="${img.fullsize}" class="${imgClass}" style="${imgStyle}" onclick="window.openModal('${img.fullsize}'); event.stopPropagation();">`).join('') + `</div>`;
                 }
-                const safeTextArg = encodeURIComponent(rec.value?.text || rec.record?.text || '');
-                embedHtml = `<div class="embedded-quote" onclick="window.openQuoteModal(event, ${JSON.stringify(rec).replace(/"/g, '&quot;')}); event.stopPropagation();"><strong>${rec.author.displayName || rec.author.handle}</strong> <span style="color:gray;">@${rec.author.handle}</span><div style="font-size:0.9em; margin-top:4px;">${linkify(rec.value?.text || rec.record?.text)}</div>${quoteMediaHtml}</div>`;
+                embedHtml = `<div class="embedded-quote" onclick="window.openQuoteModal(event, ${JSON.stringify(rec).replace(/"/g, '&quot;')}); event.stopPropagation();"><strong>${rec.author.displayName || rec.author.handle}</strong> <span style="color:gray;">@${rec.author.handle}</span><div style="font-size:0.9em; margin-top:4px;">${renderRichText(rec.value || rec.record)}</div>${quoteMediaHtml}</div>`;
             }
         }
         else if (embed.$type === 'app.bsky.embed.recordWithMedia#view') {
@@ -517,7 +613,7 @@ function createPostElement(post, isThreadRoot = false, isQuoteModal = false, rea
                 if (rec.embeds && rec.embeds[0] && rec.embeds[0].$type === 'app.bsky.embed.images#view') {
                     quoteMediaHtml = `<div class="post-images" style="margin-top:8px;">` + rec.embeds[0].images.map(img => `<img src="${img.thumb}" data-fullsize="${img.fullsize}" class="${imgClass}" style="${imgStyle}" onclick="window.openModal('${img.fullsize}'); event.stopPropagation();">`).join('') + `</div>`;
                 }
-                embedHtml += `<div class="embedded-quote" onclick="window.openQuoteModal(event, ${JSON.stringify(rec).replace(/"/g, '&quot;')}); event.stopPropagation();"><strong>${rec.author.displayName || rec.author.handle}</strong><div style="font-size:0.9em; margin-top:4px;">${linkify(rec.value?.text || rec.record?.text)}</div>${quoteMediaHtml}</div>`;
+                embedHtml += `<div class="embedded-quote" onclick="window.openQuoteModal(event, ${JSON.stringify(rec).replace(/"/g, '&quot;')}); event.stopPropagation();"><strong>${rec.author.displayName || rec.author.handle}</strong><div style="font-size:0.9em; margin-top:4px;">${renderRichText(rec.value || rec.record)}</div>${quoteMediaHtml}</div>`;
             }
         }
     }
@@ -530,25 +626,23 @@ function createPostElement(post, isThreadRoot = false, isQuoteModal = false, rea
 
     const isBookmarkedLocally = window.aeruneBookmarks.has(post.uri) || !!(post.viewer && post.viewer.bookmark);
     const bookmarkCountHtml = (isMe && typeof post.bookmarkCount !== 'undefined' && post.bookmarkCount > 0) 
-        ? `<button class="action-btn bookmarked" style="cursor:default;"><img src="${getSvgIcon('bookmark.svg')}" class="action-icon"> ${post.bookmarkCount}</button>` 
-        : (isBookmarkedLocally && !isMe ? `<button class="action-btn bookmarked" style="cursor:default;"><img src="${getSvgIcon('bookmark.svg')}" class="action-icon"></button>` : '');
+        ? `<button class="action-btn bookmarked" style="cursor:default;">${getIcon('bookmark')} ${post.bookmarkCount}</button>` 
+        : (isBookmarkedLocally && !isMe ? `<button class="action-btn bookmarked" style="cursor:default;">${getIcon('bookmark')}</button>` : '');
 
-    const safeQuoteText = encodeURIComponent(post.record?.text || post.value?.text || '');
-    
     div.innerHTML = `
         <img src="${author.avatar || ''}" class="post-avatar" onclick="window.loadProfile('${author.handle}'); event.stopPropagation();">
         <div class="post-content">
             ${repostHtml}
             <div class="post-header"><strong>${author.displayName || author.handle}</strong> <span style="color:gray;">@${author.handle}</span></div>
-            <div class="post-text">${linkify(post.record?.text || post.value?.text)}</div>
+            <div class="post-text">${renderRichText(post.record || post.value)}</div>
             ${embedHtml}
             <div class="post-actions" onclick="event.stopPropagation();">
-                <button onclick="window.prepareReply('${post.uri}', '${post.cid}', '${author.handle}', '${root.uri}', '${root.cid}')" class="action-btn"><img src="${getSvgIcon('reply.svg')}" class="action-icon"> ${post.replyCount || 0}</button>
-                <button onclick="window.doRepost('${post.uri}', '${post.cid}', ${postViewer.repost ? `'${postViewer.repost}'` : 'null'})" class="action-btn ${postViewer.repost ? 'reposted' : ''}"><img src="${getSvgIcon('repost.svg')}" class="action-icon"> ${post.repostCount || 0}</button>
-                <button onclick="window.prepareQuote('${post.uri}', '${post.cid}', '${author.handle}', decodeURIComponent('${safeQuoteText}'))" class="action-btn"><img src="${getSvgIcon('quote.svg')}" class="action-icon"></button>
-                <button onclick="window.doLike('${post.uri}', '${post.cid}', ${postViewer.like ? `'${postViewer.like}'` : 'null'})" class="action-btn ${postViewer.like ? 'liked' : ''}"><img src="${getSvgIcon('like.svg')}" class="action-icon"> ${post.likeCount || 0}</button>
+                <button onclick="window.prepareReply('${post.uri}', '${post.cid}', '${author.handle}', '${root.uri}', '${root.cid}')" class="action-btn">${getIcon('reply')} ${post.replyCount || 0}</button>
+                <button onclick="window.doRepost('${post.uri}', '${post.cid}', ${postViewer.repost ? `'${postViewer.repost}'` : 'null'})" class="action-btn ${postViewer.repost ? 'reposted' : ''}">${getIcon('repost')} ${post.repostCount || 0}</button>
+                <button onclick="window.prepareQuote('${post.uri}', '${post.cid}', '${author.handle}', '${safeQuoteText}')" class="action-btn">${getIcon('quote')}</button>
+                <button onclick="window.doLike('${post.uri}', '${post.cid}', ${postViewer.like ? `'${postViewer.like}'` : 'null'})" class="action-btn ${postViewer.like ? 'liked' : ''}">${getIcon('like')} ${post.likeCount || 0}</button>
                 ${bookmarkCountHtml}
-                ${isMe ? `<button onclick="window.deletePost('${post.uri}')" class="action-btn" style="margin-left:auto;"><img src="${getSvgIcon('trash.svg')}" class="action-icon"></button>` : ''}
+                ${isMe ? `<button onclick="window.deletePost('${post.uri}')" class="action-btn" style="margin-left:auto;">${getIcon('trash')}</button>` : ''}
             </div>
         </div>`;
     return div;
@@ -608,6 +702,7 @@ window.deletePost = async (uri) => {
 window.toggleBookmark = async (post) => {
     try {
         const isBookmarkedLocally = window.aeruneBookmarks.has(post.uri) || !!(post.viewer && post.viewer.bookmark);
+        
         let pdsUrl = 'https://bsky.social';
         if (agent.pdsUrl) pdsUrl = agent.pdsUrl;
         else if (agent.api?.xrpc?.uri) pdsUrl = agent.api.xrpc.uri;
@@ -619,29 +714,25 @@ window.toggleBookmark = async (post) => {
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${agent.session.accessJwt}` },
                 body: JSON.stringify({ uri: post.uri })
             });
-            if (!res.ok) throw new Error(`HTTP ${res.status} - ${await res.text()}`);
-            
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
             if (post.viewer) delete post.viewer.bookmark; 
             window.aeruneBookmarks.delete(post.uri);
             alert(t('action_success'));
             if (currentState?.type === 'bookmarks') fetchBookmarks();
+            else if (!els.timelineDiv.classList.contains('hidden')) fetchTimeline();
         } else {
             const res = await fetch(`${pdsUrl}/xrpc/app.bsky.bookmark.createBookmark`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${agent.session.accessJwt}` },
                 body: JSON.stringify({ uri: post.uri, cid: post.cid })
             });
-            if (!res.ok) throw new Error(`HTTP ${res.status} - ${await res.text()}`);
-            
-            if (!post.viewer) post.viewer = {};
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            if (!post.viewer) post.viewer = {}; 
             post.viewer.bookmark = "bookmarked"; 
             window.aeruneBookmarks.add(post.uri);
             alert(t('action_success'));
         }
-    } catch (e) {
-        console.error("Bookmark Error:", e);
-        alert(`${t('bookmark_failed')}\nReason: ${e.message || String(e)}`);
-    }
+    } catch (e) { console.error("Bookmark Error:", e); alert(`${t('bookmark_failed')}\nReason: ${e.message || String(e)}`); }
 };
 
 async function fetchBookmarks() {
@@ -655,7 +746,6 @@ async function fetchBookmarks() {
         const fetchRes = await fetch(`${pdsUrl}/xrpc/app.bsky.bookmark.getBookmarks?limit=${postLimit}`, {
             headers: { 'Authorization': `Bearer ${agent.session.accessJwt}` }
         });
-        
         if (!fetchRes.ok) {
             if (fetchRes.status >= 400 && fetchRes.status < 500) {
                 els.bookmarksView.innerHTML = `<div style="padding:20px; text-align:center; color:gray;">${t('no_bookmarks')}</div>`;
@@ -663,25 +753,18 @@ async function fetchBookmarks() {
             }
             throw new Error(`HTTP ${fetchRes.status}`);
         }
-        
         const data = await fetchRes.json();
         const bookmarks = data.bookmarks || [];
         const uris = [];
-        
         window.aeruneBookmarks.clear();
         for (const b of bookmarks) {
             const subjectUri = b.subject ? b.subject.uri : (b.record ? b.record.uri : null);
-            if (subjectUri) {
-                uris.push(subjectUri);
-                window.aeruneBookmarks.add(subjectUri);
-            }
+            if (subjectUri) { uris.push(subjectUri); window.aeruneBookmarks.add(subjectUri); }
         }
-        
         if (uris.length === 0) {
             els.bookmarksView.innerHTML = `<div style="padding:20px; text-align:center;">${t('no_bookmarks')}</div>`;
             return;
         }
-        
         let feedItems = [];
         for (let i = 0; i < uris.length; i += 25) {
             const chunk = uris.slice(i, i + 25);
@@ -693,30 +776,17 @@ async function fetchBookmarks() {
             });
         }
         renderPosts(feedItems, els.bookmarksView);
-    } catch(e) {
-        console.error("Fetch Bookmarks Error:", e);
-        els.bookmarksView.innerHTML = `<div style="padding:20px;text-align:center;color:red;">${t('bookmark_failed')}<br><small style="color:gray;">${e.message}</small></div>`;
-    }
+    } catch(e) { console.error("Fetch Bookmarks Error:", e); els.bookmarksView.innerHTML = `<div style="padding:20px;text-align:center;color:red;">${t('bookmark_failed')}<br><small style="color:gray;">${e.message}</small></div>`; }
 }
 
 function renderPosts(posts, container) { 
     if (!container) return; 
     container.innerHTML = ''; 
-    const fragment = document.createDocumentFragment();
-    let prevPostUri = null;
-
+    const fragment = document.createDocumentFragment(); let prevPostUri = null;
     posts.forEach(item => {
-        const post = item.post || item;
-        const el = createPostElement(post, false, false, item.reason); 
-        
-        if (item.reply && item.reply.parent && item.reply.parent.uri === prevPostUri) {
-            if (fragment.lastChild) {
-                fragment.lastChild.classList.add('thread-line');
-            }
-        }
-        
-        prevPostUri = post.uri;
-        fragment.appendChild(el);
+        const post = item.post || item; const el = createPostElement(post, false, false, item.reason); 
+        if (item.reply && item.reply.parent && item.reply.parent.uri === prevPostUri) { if (fragment.lastChild) { fragment.lastChild.classList.add('thread-line'); } }
+        prevPostUri = post.uri; fragment.appendChild(el);
     }); 
     container.appendChild(fragment);
 }
@@ -837,8 +907,8 @@ async function fetchNotifications() {
                 if (!isMe) {
                     opts.push({ divider: true });
                     opts.push({ label: authorViewer.following ? t('ctx_unfollow') : t('ctx_follow'), action: () => window.toggleFollow(n.author.did, authorViewer.following) });
-                    opts.push({ label: authorViewer.muted ? t('ctx_unmute') : t('ctx_mute'), action: () => window.toggleMute(author.did, authorViewer.muted) });
-                    opts.push({ label: authorViewer.blocking ? t('ctx_unblock') : t('ctx_block'), action: () => window.toggleBlock(author.did, authorViewer.blocking), color: '#d93025' });
+                    opts.push({ label: authorViewer.muted ? t('ctx_unmute') : t('ctx_mute'), action: () => window.toggleMute(n.author.did, authorViewer.muted) });
+                    opts.push({ label: authorViewer.blocking ? t('ctx_unblock') : t('ctx_block'), action: () => window.toggleBlock(n.author.did, authorViewer.blocking), color: '#d93025' });
                 }
                 showContextMenu(e.clientX, e.clientY, opts);
             });
@@ -861,30 +931,17 @@ window.loadThread = async (uri, isBack = false) => {
     try {
         const res = await agent.getPostThread({ uri, depth: 10, parentHeight: 10 });
         container.innerHTML = '';
-        const fragment = document.createDocumentFragment();
-        
         const renderThreadItem = (item, isRoot = false) => {
-            if (item.parent) {
-                renderThreadItem(item.parent);
-                if (fragment.lastChild) fragment.lastChild.classList.add('thread-line');
-            }
-            if (item.post) {
-                const el = createPostElement(item.post, isRoot);
-                fragment.appendChild(el);
-                if (item.replies && item.replies.length > 0) {
-                    el.classList.add('thread-line');
-                    item.replies.forEach(reply => {
-                        if (reply.post) {
-                            const rel = createPostElement(reply.post); 
-                            rel.style.marginLeft = '40px'; 
-                            fragment.appendChild(rel);
-                        }
-                    });
+            if (item.parent) renderThreadItem(item.parent);
+            if (item.post) container.appendChild(createPostElement(item.post, isRoot));
+            if (item.replies) item.replies.forEach(reply => {
+                if (reply.post) {
+                    const el = createPostElement(reply.post); el.style.marginLeft = '40px'; el.style.borderLeft = '2px solid #eee';
+                    container.appendChild(el);
                 }
-            }
+            });
         };
         renderThreadItem(res.data.thread, true);
-        container.appendChild(fragment);
     } catch (e) { container.innerHTML = '<div style="padding:20px;">Failed to load thread.</div>'; }
 };
 
@@ -909,7 +966,7 @@ window.loadProfile = async (actor, isBack = false) => {
         const bannerHtml = p.banner ? `<img src="${p.banner}" style="width:100%; height:150px; object-fit:cover;">` : `<div style="width:100%; height:150px; background:#ddd;"></div>`;
         const statsHtml = `<div style="display:flex; gap:20px; margin-top:15px; border-top:1px solid #eee; padding-top:10px; font-size:0.95em;"><span><strong>${p.postsCount || 0}</strong> <span style="color:gray;">${t('stats_posts')}</span></span><span style="cursor:pointer;" onclick="shell.openExternal('https://bsky.app/profile/${p.handle}/follows')"><strong>${p.followsCount || 0}</strong> <span style="color:gray;">${t('stats_following')}</span></span><span style="cursor:pointer;" onclick="shell.openExternal('https://bsky.app/profile/${p.handle}/followers')"><strong>${p.followersCount || 0}</strong> <span style="color:gray;">${t('stats_followers')}</span></span></div>`;
 
-        container.innerHTML = `${bannerHtml}<div style="padding:20px; position:relative;"><img src="${p.avatar || ''}" style="width:80px; height:80px; border-radius:50%; border:4px solid white; position:absolute; top:-40px; background:#eee;"><div style="margin-top:40px;"><div style="font-size:20px; font-weight:bold;">${p.displayName || p.handle}${rel}</div><div style="color:gray;">@${p.handle}</div><div style="margin-top:10px; word-break: break-word;">${linkify(p.description || '')}</div>${statsHtml}${actionBtns}</div></div>`;
+        container.innerHTML = `${bannerHtml}<div style="padding:20px; position:relative;"><img src="${p.avatar || ''}" style="width:80px; height:80px; border-radius:50%; border:4px solid white; position:absolute; top:-40px; background:#eee;"><div style="margin-top:40px;"><div style="font-size:20px; font-weight:bold;">${p.displayName || p.handle}${rel}</div><div style="color:gray;">@${p.handle}</div><div style="margin-top:10px; word-break: break-word;">${renderRichText({text: p.description || ''})}</div>${statsHtml}${actionBtns}</div></div>`;
         const feedRes = await agent.getAuthorFeed({ actor, limit: postLimit });
         let feedItems = feedRes.data.feed;
         if (p.pinnedPost) {
@@ -919,7 +976,7 @@ window.loadProfile = async (actor, isBack = false) => {
                     const pinnedPost = pinnedRes.data.posts[0];
                     const pinnedEl = createPostElement(pinnedPost, false, false);
                     const badge = document.createElement('div');
-                    badge.innerHTML = `<span style="font-size: 0.85em; color: gray; font-weight: bold;">📌 ${t('pinned_post')}</span>`;
+                    badge.innerHTML = `<span style="font-size: 0.85em; color: gray; font-weight: bold;">${getIcon('pin')} ${t('pinned_post')}</span>`;
                     badge.style.marginBottom = "8px";
                     pinnedEl.insertBefore(badge, pinnedEl.firstChild);
                     pinnedEl.style.border = "2px solid var(--bsky-blue)";
@@ -933,29 +990,6 @@ window.loadProfile = async (actor, isBack = false) => {
     } catch (e) { container.innerHTML = 'Failed to load profile.'; }
 };
 
-window.toggleFollow = async (did, followingUri) => {
-    try {
-        if (followingUri && followingUri !== 'undefined' && followingUri !== '') await agent.deleteFollow(followingUri);
-        else await agent.follow(did);
-        if (currentState?.type === 'profile') window.loadProfile(did, true);
-    } catch(e) { alert("Failed"); }
-};
-window.toggleBlock = async (did, blockingUri) => {
-    try {
-        if (blockingUri && blockingUri !== 'undefined') await agent.app.bsky.graph.block.delete({ repo: agent.session.did, rkey: blockingUri.split('/').pop() });
-        else await agent.app.bsky.graph.block.create({ repo: agent.session.did }, { subject: did, createdAt: new Date().toISOString() });
-        if (currentState?.type === 'settings') loadModerationList('blocks');
-        else alert(t('action_success'));
-    } catch(e) { alert("Failed"); }
-};
-window.toggleMute = async (did, isMuted) => {
-    try {
-        if (isMuted && isMuted !== 'false') await agent.unmute(did);
-        else await agent.mute(did);
-        if (currentState?.type === 'settings') loadModerationList('mutes');
-        else alert(t('action_success'));
-    } catch(e) { alert("Failed"); }
-};
 window.togglePin = async (post) => {
     try {
         const repo = agent.session.did;
@@ -969,36 +1003,99 @@ window.togglePin = async (post) => {
     } catch (e) { alert("Failed to pin/unpin"); }
 };
 
-async function loadModerationList(type) {
-    const container = document.getElementById('moderation-list-container');
-    container.innerHTML = '<div style="padding:10px;">Loading...</div>';
-    try {
-        let items = [];
-        if (type === 'blocks') {
-            const res = await agent.app.bsky.graph.getBlocks({ limit: 50 });
-            items = res.data.blocks.map(b => ({ did: b.did, handle: b.handle, name: b.displayName, uri: b.viewer.blocking }));
-        } else {
-            const res = await agent.app.bsky.graph.getMutes({ limit: 50 });
-            items = res.data.mutes.map(m => ({ did: m.did, handle: m.handle, name: m.displayName, isMuted: m.viewer.muted }));
-        }
-        container.innerHTML = '';
-        if (items.length === 0) container.innerHTML = '<div style="padding:10px;">No accounts found.</div>';
-        items.forEach(item => {
-            const div = document.createElement('div');
-            div.className = 'user-list-item';
-            div.innerHTML = `<div><strong>${item.name || item.handle}</strong> <span style="color:gray;">@${item.handle}</span></div><button class="sidebar-action-btn" style="width:auto; padding:4px 8px;">${type === 'blocks' ? t('ctx_unblock') : t('ctx_unmute')}</button>`;
-            div.querySelector('button').onclick = () => {
-                if (type === 'blocks') window.toggleBlock(item.did, item.uri);
-                else window.toggleMute(item.did, item.isMuted);
-            };
-            container.appendChild(div);
+window.showListModal = function(title, fetcher, type) {
+    let modal = document.getElementById('list-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'list-modal';
+        modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; display:flex; align-items:center; justify-content:center;';
+        const content = document.createElement('div');
+        content.style.cssText = 'background:white; width:400px; max-width:90%; max-height:80%; border-radius:12px; display:flex; flex-direction:column; overflow:hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.2);';
+        
+        const header = document.createElement('div');
+        header.style.cssText = 'padding:15px 20px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center; font-weight:bold; font-size:1.1em;';
+        header.innerHTML = `<span id="list-modal-title"></span><span style="cursor:pointer; color:gray; font-size:1.2em;" onclick="document.getElementById('list-modal').style.display='none'">✖</span>`;
+        
+        const body = document.createElement('div');
+        body.id = 'list-modal-body';
+        body.style.cssText = 'padding:15px; overflow-y:auto; flex:1;';
+        
+        content.appendChild(header);
+        content.appendChild(body);
+        modal.appendChild(content);
+        document.body.appendChild(modal);
+        
+        modal.addEventListener('click', (e) => {
+            if (e.target.id === 'list-modal') modal.style.display = 'none';
         });
-    } catch(e) { container.innerHTML = '<div style="padding:10px;">Failed to load.</div>'; }
-}
+    }
+    
+    document.getElementById('list-modal-title').innerText = title;
+    const body = document.getElementById('list-modal-body');
+    body.innerHTML = '<div style="text-align:center; color:gray; padding:20px;">Loading...</div>';
+    modal.style.display = 'flex';
+    
+    fetcher().then(users => {
+        body.innerHTML = '';
+        if (!users || users.length === 0) {
+            body.innerHTML = '<div style="text-align:center; color:gray; padding:20px;">該当するアカウントはありません。</div>';
+            return;
+        }
+        users.forEach(user => {
+            const div = document.createElement('div');
+            div.style.cssText = 'display:flex; align-items:center; padding:10px 0; border-bottom:1px solid #f0f0f0;';
+            div.innerHTML = `
+                <img src="${user.avatar || ''}" style="width:40px; height:40px; border-radius:50%; margin-right:12px; background:#eee; cursor:pointer;" onclick="window.loadProfile('${user.handle}'); document.getElementById('list-modal').style.display='none';">
+                <div style="flex:1; overflow:hidden;">
+                    <div style="font-weight:bold; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer;" onclick="window.loadProfile('${user.handle}'); document.getElementById('list-modal').style.display='none';">${user.displayName || user.handle}</div>
+                    <div style="color:gray; font-size:0.85em;">@${user.handle}</div>
+                </div>
+                <button class="action-btn" style="color:#d93025; border:1px solid #d93025; border-radius:15px; padding:4px 12px; font-weight:bold; opacity:1;" onclick="window.un${type}User('${user.did}', this)">解除</button>
+            `;
+            body.appendChild(div);
+        });
+    }).catch(err => {
+        body.innerHTML = `<div style="color:red; padding:20px;">Error: ${err.message}</div>`;
+    });
+};
 
-document.getElementById('btn-load-mutes')?.addEventListener('click', () => loadModerationList('mutes'));
-document.getElementById('btn-load-blocks')?.addEventListener('click', () => loadModerationList('blocks'));
+window.showMutes = async () => {
+    window.showListModal(t('settings_mutes'), async () => {
+        const res = await agent.app.bsky.graph.getMutes({ limit: 50 });
+        return res.data.mutes;
+    }, 'Mute');
+};
 
+window.showBlocks = async () => {
+    window.showListModal(t('settings_blocks'), async () => {
+        const res = await agent.app.bsky.graph.getBlocks({ limit: 50 });
+        return res.data.blocks;
+    }, 'Block');
+};
+
+window.unMuteUser = async (did, btnEl) => {
+    try {
+        btnEl.disabled = true; btnEl.innerText = '処理中';
+        await agent.unmute(did);
+        btnEl.innerText = '解除済'; btnEl.style.color = 'gray'; btnEl.style.borderColor = 'gray';
+    } catch(e) { alert('Failed: ' + e.message); btnEl.disabled = false; btnEl.innerText = '解除'; }
+};
+
+window.unBlockUser = async (did, btnEl) => {
+    try {
+        btnEl.disabled = true; btnEl.innerText = '処理中';
+        const profile = await agent.getProfile({ actor: did });
+        if (profile.data.viewer && profile.data.viewer.blocking) {
+            const uri = profile.data.viewer.blocking;
+            const repo = agent.session.did;
+            const rkey = uri.split('/').pop();
+            await agent.com.atproto.repo.deleteRecord({ repo, collection: 'app.bsky.graph.block', rkey });
+            btnEl.innerText = '解除済'; btnEl.style.color = 'gray'; btnEl.style.borderColor = 'gray';
+        } else { alert('ブロック情報が見つかりません'); btnEl.disabled = false; btnEl.innerText = '解除'; }
+    } catch(e) { alert('Failed: ' + e.message); btnEl.disabled = false; btnEl.innerText = '解除'; }
+};
+
+// ★ 元のチャット機能にCmd+Enter送信などを統合
 function getChatAgent() { return agent.withProxy('bsky_chat', 'did:web:api.bsky.chat'); }
 async function fetchConvos() {
     try {
@@ -1085,13 +1182,6 @@ window.execSearch = async (q) => {
     } catch (e) {}
 };
 
-document.getElementById('refresh-btn')?.addEventListener('click', () => {
-    if (!els.timelineDiv.classList.contains('hidden')) fetchTimeline();
-    else if (!els.notifDiv.classList.contains('hidden')) fetchNotifications();
-    else if (!els.chatView.classList.contains('hidden')) fetchConvos();
-    else if (els.bookmarksView && !els.bookmarksView.classList.contains('hidden')) fetchBookmarks();
-});
-
 document.getElementById('search-exec-btn')?.addEventListener('click', () => window.execSearch());
 document.getElementById('add-account-btn')?.addEventListener('click', () => { els.loginForm.classList.remove('hidden'); if (els.app) els.app.style.opacity = "0.3"; });
 document.getElementById('logout-btn')?.addEventListener('click', async () => {
@@ -1107,21 +1197,17 @@ document.getElementById('settings-save-btn')?.addEventListener('click', () => {
     const newLimit = parseInt(document.getElementById('setting-limit').value) || 30;
     const newBlur = document.getElementById('setting-nsfw').checked;
     const newShowBookmarks = document.getElementById('setting-bookmark-tab').checked;
-    
     localStorage.setItem('aerune_lang', newLang);
     localStorage.setItem('aerune_post_limit', newLimit.toString());
     localStorage.setItem('aerune_nsfw_blur', newBlur.toString());
     localStorage.setItem('aerune_show_bookmarks', newShowBookmarks.toString());
-    
     currentLang = newLang;
     nsfwBlur = newBlur;
     showBookmarksConfig = newShowBookmarks;
     postLimit = Math.min(Math.max(newLimit, 10), 100);
     document.getElementById('setting-limit').value = postLimit;
-    
     const navBookmarks = document.getElementById('nav-bookmarks');
     if (navBookmarks) navBookmarks.style.display = showBookmarksConfig ? 'block' : 'none';
-    
     applyTranslations();
     const msg = document.getElementById('settings-msg');
     msg.innerText = t('settings_saved');
