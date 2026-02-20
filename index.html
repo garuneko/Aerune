@@ -4,6 +4,24 @@
     <meta charset="UTF-8">
     <title>Aerune</title>
     <link rel="stylesheet" href="style.css">
+    <style>
+        /* 追加されたUI用のCSSスタイル */
+        .ctx-menu { position: fixed; background: white; border: 1px solid #ddd; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border-radius: 8px; z-index: 10000; padding: 6px 0; min-width: 180px; font-size: 0.9em; }
+        .ctx-menu-item { padding: 10px 16px; cursor: pointer; color: #333; display: flex; align-items: center; gap: 8px; }
+        .ctx-menu-item:hover { background: #f0f4f8; }
+        .ctx-divider { height: 1px; background: #eee; margin: 6px 0; }
+        .img-preview-wrap { display: inline-block; position: relative; margin-right: 12px; margin-bottom: 12px; vertical-align: top; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .img-preview-wrap img { max-height: 120px; display: block; }
+        .img-controls { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.7); padding: 4px; display: flex; gap: 4px; }
+        .img-controls input { flex: 1; font-size: 0.75em; padding: 4px; border: none; border-radius: 4px; background: rgba(255,255,255,0.9); }
+        .img-controls button { background: none; border: none; color: white; cursor: pointer; font-size: 0.9em; padding: 0 4px; transition: 0.2s; }
+        .img-controls button:hover { transform: scale(1.2); }
+        .img-controls button:disabled { opacity: 0.3; cursor: not-allowed; }
+        .nsfw-blur { filter: blur(20px); transition: filter 0.3s ease; cursor: pointer; }
+        .nsfw-blur:hover { filter: blur(0px); }
+        .user-list-item { display: flex; align-items: center; justify-content: space-between; padding: 10px; border-bottom: 1px solid #eee; }
+        .danger-text { color: #d93025; }
+    </style>
 </head>
 <body>
     <div id="app" style="transition: opacity 0.3s;">
@@ -62,6 +80,7 @@
             
             <div id="settings-view" class="hidden">
                 <div style="padding: 20px;">
+                    <h3 data-i18n="settings_general" style="margin-bottom:15px; border-bottom:1px solid #ccc; padding-bottom:5px;">一般設定</h3>
                     <div style="margin-top: 10px; margin-bottom: 20px;">
                         <label data-i18n="settings_lang" style="display:block; margin-bottom:8px; font-weight:bold;">言語 / Language</label>
                         <select id="setting-lang" style="padding: 8px; border-radius: 5px; border: 1px solid #ccc; width: 100%; max-width: 300px;">
@@ -73,8 +92,21 @@
                         <label data-i18n="settings_limit" style="display:block; margin-bottom:8px; font-weight:bold;">TLや検索の読み込み件数 (10〜100)</label>
                         <input type="number" id="setting-limit" min="10" max="100" style="padding: 8px; border-radius: 5px; border: 1px solid #ccc; width: 100px;">
                     </div>
+                    <div style="margin-bottom: 20px;">
+                        <label style="display:flex; align-items:center; font-weight:bold; cursor:pointer;">
+                            <input type="checkbox" id="setting-nsfw" style="margin-right:8px; width:18px; height:18px;">
+                            <span data-i18n="settings_nsfw">NSFW画像にぼかしを入れる</span>
+                        </label>
+                    </div>
                     <button id="settings-save-btn" class="sidebar-action-btn" style="width:auto; padding:8px 24px;" data-i18n="settings_save">保存</button>
                     <div id="settings-msg" style="color: green; margin-top: 10px; font-size: 0.9em; height: 1.5em;"></div>
+
+                    <h3 data-i18n="settings_moderation" style="margin-top:40px; margin-bottom:15px; border-bottom:1px solid #ccc; padding-bottom:5px;">モデレーション</h3>
+                    <div style="display:flex; gap:10px; margin-bottom: 20px;">
+                        <button id="btn-load-mutes" class="sidebar-action-btn" style="width:auto; padding:8px 16px; background:#666;" data-i18n="settings_mutes">ミュート中のアカウント</button>
+                        <button id="btn-load-blocks" class="sidebar-action-btn" style="width:auto; padding:8px 16px; background:#d93025;" data-i18n="settings_blocks">ブロック中のアカウント</button>
+                    </div>
+                    <div id="moderation-list-container" style="background:#f9f9f9; border-radius:8px; max-height:300px; overflow-y:auto;"></div>
                 </div>
             </div>
 
@@ -101,6 +133,9 @@
     </div>
     <div id="image-modal" class="hidden"><span id="modal-close">&times;</span><img id="modal-image" src=""></div>
     <div id="quote-modal" class="hidden"><div class="modal-content"><span id="quote-modal-close" class="modal-close-btn">&times;</span><div id="quote-modal-body"></div></div></div>
+    
+    <div id="ctx-menu" class="ctx-menu hidden"></div>
+
     <script src="renderer.js"></script>
 </body>
 </html>
