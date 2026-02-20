@@ -1,10 +1,5 @@
 Bluesky専用パソコン用クライアントアプリ　Aerune(エアルネ)
-
-注意事項 (Beta)
-
-・本アプリはベータ版です。予期せぬ動作が発生する可能性があります。
-
-・ログインにはBlueskyの「アプリパスワード」を使用してください。
+ログインにはBlueskyの「アプリパスワード」を使用してください。
 
 ## Mac版をご利用の方へ（初回起動時の注意）
 
@@ -37,11 +32,7 @@ MIT License
 # Aerune - Bluesky Desktop Client
 
 A dedicated desktop client application for Bluesky.
-
-## Notice (Beta)
-
-- This application is in beta version. Unexpected behavior may occur.
-- Please use your Bluesky "App Password" to log in.
+Please use your Bluesky "App Password" to log in.
 
 ## For Mac Users (First Launch Instructions)
 
