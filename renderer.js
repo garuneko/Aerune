@@ -116,7 +116,6 @@ async function initApp() {
         els.postInput.style.minHeight = '80px';
     }
 
-    // 設定画面の初期値セット
     document.getElementById('setting-lang').value = currentLang;
     document.getElementById('setting-limit').value = postLimit;
 
@@ -414,7 +413,13 @@ async function fetchNotifications() {
         const notifications = res.data.notifications;
         const uris = notifications.filter(n => (n.reason === 'like' || n.reason === 'repost') && n.reasonSubject).map(n => n.reasonSubject);
         const postMap = {};
-        if (uris.length > 0) { const postsRes = await agent.getPosts({ uris }); postsRes.data.posts.forEach(p => { postMap[p.uri] = p.record.text; }); }
+        if (uris.length > 0) { 
+            for (let i = 0; i < uris.length; i += 25) {
+                const chunk = uris.slice(i, i + 25);
+                const postsRes = await agent.getPosts({ uris: chunk }); 
+                postsRes.data.posts.forEach(p => { postMap[p.uri] = p.record.text; }); 
+            }
+        }
         els.notifDiv.innerHTML = '';
         notifications.forEach(n => {
             const div = document.createElement('div'); div.className = 'post';
@@ -485,11 +490,9 @@ window.loadProfile = async (actor, isBack = false) => {
         
         container.innerHTML = `<img src="${p.banner || ''}" style="width:100%; height:150px; object-fit:cover;"><div style="padding:20px; position:relative;"><img src="${p.avatar || ''}" style="width:80px; height:80px; border-radius:50%; border:4px solid white; position:absolute; top:-40px;"><div style="margin-top:40px;"><div style="font-size:20px; font-weight:bold;">${p.displayName || p.handle}${rel}</div><div style="color:gray;">@${p.handle}</div><div style="margin-top:10px; word-break: break-word;">${linkify(p.description || '')}</div>${actionBtns}</div></div>`;
         
-        // 通常のタイムライン取得
         const feedRes = await agent.getAuthorFeed({ actor, limit: postLimit });
         let feedItems = feedRes.data.feed;
 
-        // 固定ポストの表示処理
         if (p.pinnedPost) {
             try {
                 const pinnedRes = await agent.getPosts({ uris: [p.pinnedPost.uri] });
@@ -502,12 +505,10 @@ window.loadProfile = async (actor, isBack = false) => {
                     badge.style.marginBottom = "8px";
                     pinnedEl.insertBefore(badge, pinnedEl.firstChild);
                     
-                    // 固定ポストをハイライト
                     pinnedEl.style.border = "2px solid var(--bsky-blue)";
                     pinnedEl.style.backgroundColor = "rgba(0, 133, 255, 0.05)";
                     pinnedContainer.appendChild(pinnedEl);
 
-                    // タイムラインの重複を排除
                     feedItems = feedItems.filter(item => item.post.uri !== p.pinnedPost.uri);
                 }
             } catch (err) {
@@ -576,16 +577,19 @@ window.startDirectMessage = async (did) => {
 };
 
 function switchView(viewId, activeDiv) {
-    if (!els.viewTitle) return; els.viewTitle.innerText = t('nav_' + viewId);
+    if (!els.viewTitle) return; 
+    els.viewTitle.setAttribute('data-i18n', 'nav_' + viewId);
+    els.viewTitle.innerText = t('nav_' + viewId);
     [els.timelineDiv, els.notifDiv, els.chatView, els.searchView, els.profileView, els.threadView, els.settingsView].forEach(d => d?.classList.add('hidden'));
     if(activeDiv) activeDiv.classList.remove('hidden');
     document.querySelectorAll('.nav-links li').forEach(li => li.classList.remove('active'));
     document.getElementById(`nav-${viewId}`)?.classList.add('active');
 
+    // ★ 修正: chat または settings の時に投稿欄を隠す
     if (els.dropZone) {
-        els.dropZone.style.display = (viewId === 'chat') ? 'none' : '';
+        els.dropZone.style.display = (viewId === 'chat' || viewId === 'settings') ? 'none' : '';
     } else if (els.postInput && els.postInput.parentElement) {
-        els.postInput.parentElement.style.display = (viewId === 'chat') ? 'none' : '';
+        els.postInput.parentElement.style.display = (viewId === 'chat' || viewId === 'settings') ? 'none' : '';
     }
 }
 
@@ -615,7 +619,6 @@ document.getElementById('nav-search')?.addEventListener('click', () => {
 document.getElementById('nav-profile').addEventListener('click', () => { 
     window.loadProfile(agent.session.did); 
 });
-// ★ 設定ボタン
 document.getElementById('nav-settings').addEventListener('click', () => { 
     pushState({ type: 'settings' }); switchView('settings', els.settingsView); 
 });
@@ -659,7 +662,6 @@ document.getElementById('logout-btn')?.addEventListener('click', async () => {
     }
 });
 
-// ★ 設定保存ボタン
 document.getElementById('settings-save-btn')?.addEventListener('click', () => {
     const newLang = document.getElementById('setting-lang').value;
     const newLimit = parseInt(document.getElementById('setting-limit').value) || 30;
@@ -690,7 +692,6 @@ window.addEventListener('keydown', (e) => {
     }
 });
 
-// ★ Cmd+V / Ctrl+V での画像ペースト対応
 window.addEventListener('paste', (e) => {
     if (e.clipboardData && e.clipboardData.files.length > 0) {
         const files = Array.from(e.clipboardData.files).filter(f => f.type.startsWith('image/'));
