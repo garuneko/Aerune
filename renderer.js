@@ -6,22 +6,31 @@ const translations = {
         nav_home: "ホーム", nav_notifications: "通知", nav_search: "検索", nav_profile: "プロフィール", nav_thread: "スレッド", nav_chat: "チャット", nav_settings: "設定",
         add_account: "＋ アカウント追加", logout: "ログアウト", post_placeholder: "今なにしてる？", send: "送信",
         login_title: "Aerune ログイン", login_id: "ハンドル名 (handle.bsky.social)", login_pw: "アプリパスワード", login_btn: "ログイン",
-        reply_placeholder: "@{0} への返信", quote_placeholder: "@{0} を引用中...", login_failed: "ログインに失敗しました。", post_failed: "投稿に失敗しました。",
+        reply_placeholder: "@{0} への返信", quote_placeholder: "@{0} を引用中...", login_failed: "ログインに失敗しました。", post_failed: "投稿に失敗しました。下書きは保持されています。",
         delete_confirm: "このポストを削除しますか？", delete_failed: "削除に失敗しました。",
-        follow_me: "フォローされています", following: "フォロー中", mutual: "相互フォロー", send_dm: "✉️ DMを送る",
+        follow_me: "フォローされています", following: "フォロー中", mutual: "相互フォロー", send_dm: "✉️ DM",
         chat_placeholder: "メッセージを入力...", 
         notif_like: "があなたのポストをいいねしました", notif_repost: "があなたのポストをリポストしました",
         notif_follow: "があなたをフォローしました", notif_mention: "があなたをメンションしました",
         notif_reply: "があなたに返信しました", notif_quote: "があなたのポストを引用しました",
         search_btn: "検索", search_placeholder: "検索キーワードを入力...", reposted_by: "🔁 {0} がリポスト", logout_confirm: "現在のアカウントからログアウトしますか？",
         profile_reply: "＠ リプライ",
-        settings_lang: "言語 / Language", settings_limit: "TLや検索の読み込み件数 (10〜100)", settings_save: "保存", settings_saved: "設定を保存しました", pinned_post: "固定されたポスト"
+        settings_general: "一般設定", settings_moderation: "モデレーション",
+        settings_lang: "言語 / Language", settings_limit: "TLや検索の読み込み件数 (10〜100)", settings_save: "保存", settings_saved: "設定を保存しました", 
+        settings_nsfw: "NSFW画像にぼかしを入れる", settings_mutes: "ミュート中のアカウント", settings_blocks: "ブロック中のアカウント",
+        pinned_post: "固定されたポスト",
+        ctx_reply: "💬 返信", ctx_repost: "🔁 リポスト", ctx_quote: "📝 引用", ctx_profile: "👤 プロフィールを見る",
+        ctx_pin: "📌 固定ポストに設定", ctx_unpin: "📌 固定ポストを解除",
+        ctx_follow: "➕ フォロー", ctx_unfollow: "➖ フォロー解除",
+        ctx_mute: "🔇 ミュート", ctx_unmute: "🔊 ミュート解除",
+        ctx_block: "🚫 ブロック", ctx_unblock: "✅ ブロック解除",
+        save_image: "💾 画像を保存", action_success: "完了しました"
     },
     en: {
         nav_home: "Home", nav_notifications: "Notifications", nav_search: "Search", nav_profile: "Profile", nav_thread: "Thread", nav_chat: "Chat", nav_settings: "Settings",
         add_account: "+ Add Account", logout: "Logout", post_placeholder: "What's up?", send: "Post",
         login_title: "Login to Aerune", login_id: "Handle (handle.bsky.social)", login_pw: "App Password", login_btn: "Login",
-        reply_placeholder: "Reply to @{0}", quote_placeholder: "Quoting @{0}...", login_failed: "Login failed.", post_failed: "Post failed.", 
+        reply_placeholder: "Reply to @{0}", quote_placeholder: "Quoting @{0}...", login_failed: "Login failed.", post_failed: "Post failed. Draft is kept.", 
         delete_confirm: "Are you sure you want to delete this post?", delete_failed: "Failed to delete.",
         follow_me: "Follows you", following: "Following", mutual: "Mutual", send_dm: "✉️ Message",
         chat_placeholder: "Type a message...", 
@@ -30,12 +39,22 @@ const translations = {
         notif_reply: "replied to you", notif_quote: "quoted your post",
         search_btn: "Search", search_placeholder: "Enter keyword...", reposted_by: "🔁 Reposted by {0}", logout_confirm: "Are you sure you want to log out of the current account?",
         profile_reply: "@ Reply",
-        settings_lang: "言語 / Language", settings_limit: "Timeline & Search limit (10-100)", settings_save: "Save", settings_saved: "Settings saved", pinned_post: "Pinned Post"
+        settings_general: "General", settings_moderation: "Moderation",
+        settings_lang: "言語 / Language", settings_limit: "Timeline limit (10-100)", settings_save: "Save", settings_saved: "Settings saved", 
+        settings_nsfw: "Blur NSFW Images", settings_mutes: "Muted Accounts", settings_blocks: "Blocked Accounts",
+        pinned_post: "Pinned Post",
+        ctx_reply: "💬 Reply", ctx_repost: "🔁 Repost", ctx_quote: "📝 Quote", ctx_profile: "👤 View Profile",
+        ctx_pin: "📌 Pin Post", ctx_unpin: "📌 Unpin Post",
+        ctx_follow: "➕ Follow", ctx_unfollow: "➖ Unfollow",
+        ctx_mute: "🔇 Mute", ctx_unmute: "🔊 Unmute",
+        ctx_block: "🚫 Block", ctx_unblock: "✅ Unblock",
+        save_image: "💾 Save Image", action_success: "Success"
     }
 };
 
 let currentLang = localStorage.getItem('aerune_lang') || (navigator.language.startsWith('ja') ? 'ja' : 'en');
 let postLimit = parseInt(localStorage.getItem('aerune_post_limit')) || 30;
+let nsfwBlur = localStorage.getItem('aerune_nsfw_blur') !== 'false';
 
 const t = (key, ...args) => {
     let text = translations[currentLang][key] || key;
@@ -100,6 +119,7 @@ async function initApp() {
     els.dropZone = get('drop-zone');
     els.quotePreview = get('quote-preview');
     els.imagePreviewContainer = get('image-preview-container');
+    els.ctxMenu = get('ctx-menu');
 
     if (els.viewTitle && !document.getElementById('back-btn')) {
         const backBtn = document.createElement('button');
@@ -114,22 +134,30 @@ async function initApp() {
 
     if (els.postInput) {
         els.postInput.style.minHeight = '80px';
+        els.postInput.value = localStorage.getItem('aerune_draft_text') || '';
+        els.postInput.addEventListener('input', () => {
+            localStorage.setItem('aerune_draft_text', els.postInput.value);
+        });
     }
 
     document.getElementById('setting-lang').value = currentLang;
     document.getElementById('setting-limit').value = postLimit;
+    document.getElementById('setting-nsfw').checked = nsfwBlur;
 
     applyTranslations();
 
     if (els.dropZone) {
         els.dropZone.addEventListener('dragover', (e) => { e.preventDefault(); e.stopPropagation(); els.dropZone.classList.add('drag-over'); });
         els.dropZone.addEventListener('dragleave', (e) => { e.preventDefault(); e.stopPropagation(); els.dropZone.classList.remove('drag-over'); });
-        els.dropZone.addEventListener('drop', (e) => {
+        els.dropZone.addEventListener('drop', async (e) => {
             e.preventDefault(); e.stopPropagation(); els.dropZone.classList.remove('drag-over');
             const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
-            if (files.length > 0) { selectedImages = [...selectedImages, ...files].slice(0, 4); updateImagePreview(); }
+            await processIncomingImages(files);
         });
     }
+
+    document.addEventListener('click', () => { if (els.ctxMenu) els.ctxMenu.classList.add('hidden'); });
+    document.querySelector('.content')?.addEventListener('scroll', () => { if (els.ctxMenu) els.ctxMenu.classList.add('hidden'); });
 
     try {
         const data = await ipcRenderer.invoke('load-session');
@@ -213,8 +241,45 @@ function linkify(text) {
     return escaped;
 }
 
+function showContextMenu(x, y, items) {
+    els.ctxMenu.innerHTML = '';
+    items.forEach(item => {
+        if (item.divider) {
+            const div = document.createElement('div'); div.className = 'ctx-divider';
+            els.ctxMenu.appendChild(div);
+        } else {
+            const div = document.createElement('div'); div.className = 'ctx-menu-item';
+            if (item.color) div.style.color = item.color;
+            div.innerText = item.label;
+            div.onclick = (e) => { e.stopPropagation(); els.ctxMenu.classList.add('hidden'); item.action(); };
+            els.ctxMenu.appendChild(div);
+        }
+    });
+    els.ctxMenu.classList.remove('hidden');
+    let posX = Math.min(x, window.innerWidth - els.ctxMenu.offsetWidth - 10);
+    let posY = Math.min(y, window.innerHeight - els.ctxMenu.offsetHeight - 10);
+    els.ctxMenu.style.left = `${posX}px`;
+    els.ctxMenu.style.top = `${posY}px`;
+}
+
+async function downloadImage(url) {
+    try {
+        const res = await fetch(url);
+        const blob = await res.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = `aerune_img_${Date.now()}.jpg`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(blobUrl);
+    } catch(e) { alert('Download failed'); }
+}
+
 function createPostElement(post, isThreadRoot = false, isQuoteModal = false, reason = null) {
-    const author = post.author, viewer = post.viewer || {}, root = post.record?.reply?.root || { uri: post.uri, cid: post.cid };
+    // ★ authorViewer（ユーザー関係性）と postViewer（ポストへのアクション）を正しく分離
+    const author = post.author, postViewer = post.viewer || {}, authorViewer = author.viewer || {}, root = post.record?.reply?.root || { uri: post.uri, cid: post.cid };
     const div = document.createElement('div');
     div.className = 'post';
     if (isThreadRoot) div.style.borderLeft = '4px solid var(--bsky-blue)';
@@ -224,21 +289,57 @@ function createPostElement(post, isThreadRoot = false, isQuoteModal = false, rea
             if (window.getSelection().toString().length > 0) return;
             window.loadThread(post.uri);
         };
+        div.addEventListener('contextmenu', async (e) => {
+            e.preventDefault(); e.stopPropagation();
+            if (window.getSelection().toString().length > 0) return;
+
+            if (e.target.tagName === 'IMG' && e.target.classList.contains('post-img-thumb')) {
+                showContextMenu(e.pageX, e.pageY, [
+                    { label: t('save_image'), action: () => downloadImage(e.target.dataset.fullsize || e.target.src) }
+                ]);
+                return;
+            }
+
+            const isMe = author.did === agent.session.did;
+            let opts = [
+                { label: t('ctx_reply'), action: () => window.prepareReply(post.uri, post.cid, author.handle, root.uri, root.cid) },
+                { label: t('ctx_repost'), action: () => window.doRepost(post.uri, post.cid, postViewer.repost) },
+                { label: t('ctx_quote'), action: () => window.prepareQuote(post.uri, post.cid, author.handle, post.record?.text || '') },
+                { divider: true },
+                { label: t('ctx_profile'), action: () => window.loadProfile(author.handle) },
+            ];
+
+            if (isMe) {
+                opts.push({ divider: true });
+                opts.push({ label: t('ctx_pin') + "/" + t('ctx_unpin'), action: () => window.togglePin(post) });
+            } else {
+                opts.push({ divider: true });
+                // ★ 正しい関係性データ（authorViewer）を参照するように修正
+                opts.push({ label: authorViewer.following ? t('ctx_unfollow') : t('ctx_follow'), action: () => window.toggleFollow(author.did, authorViewer.following) });
+                opts.push({ label: authorViewer.muted ? t('ctx_unmute') : t('ctx_mute'), action: () => window.toggleMute(author.did, authorViewer.muted) });
+                opts.push({ label: authorViewer.blocking ? t('ctx_unblock') : t('ctx_block'), action: () => window.toggleBlock(author.did, authorViewer.blocking), color: '#d93025' });
+            }
+            showContextMenu(e.pageX, e.pageY, opts);
+        });
     }
+
+    const isNsfw = post.labels?.some(l => ['porn', 'sexual', 'nudity'].includes(l.val)) || post.author.labels?.some(l => ['porn', 'sexual', 'nudity'].includes(l.val));
+    const imgClass = (isNsfw && nsfwBlur) ? 'post-img-thumb nsfw-blur' : 'post-img-thumb';
+    const imgStyle = 'object-fit: cover; max-height: 400px; width: 100%; border-radius: 8px;';
 
     let embedHtml = '';
     const embed = post.embed;
 
     if (embed) {
         if (embed.$type === 'app.bsky.embed.images#view') {
-            embedHtml = `<div class="post-images">` + embed.images.map(img => `<img src="${img.thumb}" class="post-img-thumb" onclick="window.openModal('${img.fullsize}'); event.stopPropagation();">`).join('') + `</div>`;
+            embedHtml = `<div class="post-images">` + embed.images.map(img => `<img src="${img.thumb}" data-fullsize="${img.fullsize}" class="${imgClass}" style="${imgStyle}" onclick="window.openModal('${img.fullsize}'); event.stopPropagation();">`).join('') + `</div>`;
         } 
         else if (embed.$type === 'app.bsky.embed.record#view') {
             const rec = embed.record;
             if (rec.author) {
                 let quoteMediaHtml = '';
                 if (rec.embeds && rec.embeds[0] && rec.embeds[0].$type === 'app.bsky.embed.images#view') {
-                    quoteMediaHtml = `<div class="post-images" style="margin-top:8px;">` + rec.embeds[0].images.map(img => `<img src="${img.thumb}" class="post-img-thumb" onclick="window.openModal('${img.fullsize}'); event.stopPropagation();">`).join('') + `</div>`;
+                    quoteMediaHtml = `<div class="post-images" style="margin-top:8px;">` + rec.embeds[0].images.map(img => `<img src="${img.thumb}" data-fullsize="${img.fullsize}" class="${imgClass}" style="${imgStyle}" onclick="window.openModal('${img.fullsize}'); event.stopPropagation();">`).join('') + `</div>`;
                 }
                 embedHtml = `
                 <div class="embedded-quote" onclick="window.openQuoteModal(event, ${JSON.stringify(rec).replace(/"/g, '&quot;')}); event.stopPropagation();">
@@ -250,13 +351,13 @@ function createPostElement(post, isThreadRoot = false, isQuoteModal = false, rea
         }
         else if (embed.$type === 'app.bsky.embed.recordWithMedia#view') {
             if (embed.media?.images) {
-                embedHtml = `<div class="post-images">` + embed.media.images.map(img => `<img src="${img.thumb}" class="post-img-thumb" onclick="window.openModal('${img.fullsize}'); event.stopPropagation();">`).join('') + `</div>`;
+                embedHtml = `<div class="post-images">` + embed.media.images.map(img => `<img src="${img.thumb}" data-fullsize="${img.fullsize}" class="${imgClass}" style="${imgStyle}" onclick="window.openModal('${img.fullsize}'); event.stopPropagation();">`).join('') + `</div>`;
             }
             const rec = embed.record.record;
             if (rec && rec.author) {
                 let quoteMediaHtml = '';
                 if (rec.embeds && rec.embeds[0] && rec.embeds[0].$type === 'app.bsky.embed.images#view') {
-                    quoteMediaHtml = `<div class="post-images" style="margin-top:8px;">` + rec.embeds[0].images.map(img => `<img src="${img.thumb}" class="post-img-thumb" onclick="window.openModal('${img.fullsize}'); event.stopPropagation();">`).join('') + `</div>`;
+                    quoteMediaHtml = `<div class="post-images" style="margin-top:8px;">` + rec.embeds[0].images.map(img => `<img src="${img.thumb}" data-fullsize="${img.fullsize}" class="${imgClass}" style="${imgStyle}" onclick="window.openModal('${img.fullsize}'); event.stopPropagation();">`).join('') + `</div>`;
                 }
                 embedHtml += `
                 <div class="embedded-quote" onclick="window.openQuoteModal(event, ${JSON.stringify(rec).replace(/"/g, '&quot;')}); event.stopPropagation();">
@@ -283,9 +384,9 @@ function createPostElement(post, isThreadRoot = false, isQuoteModal = false, rea
             ${embedHtml}
             <div class="post-actions" onclick="event.stopPropagation();">
                 <button onclick="window.prepareReply('${post.uri}', '${post.cid}', '${author.handle}', '${root.uri}', '${root.cid}')" class="action-btn">💬 ${post.replyCount || 0}</button>
-                <button onclick="window.doRepost('${post.uri}', '${post.cid}', ${viewer.repost ? `'${viewer.repost}'` : 'null'})" class="action-btn ${viewer.repost ? 'reposted' : ''}">🔁 ${post.repostCount || 0}</button>
+                <button onclick="window.doRepost('${post.uri}', '${post.cid}', ${postViewer.repost ? `'${postViewer.repost}'` : 'null'})" class="action-btn ${postViewer.repost ? 'reposted' : ''}">🔁 ${post.repostCount || 0}</button>
                 <button onclick="window.prepareQuote('${post.uri}', '${post.cid}', '${author.handle}', '${(post.record?.text || post.value?.text || '').replace(/'/g, "\\'")}')" class="action-btn">📝</button>
-                <button onclick="window.doLike('${post.uri}', '${post.cid}', ${viewer.like ? `'${viewer.like}'` : 'null'})" class="action-btn ${viewer.like ? 'liked' : ''}">❤️ ${post.likeCount || 0}</button>
+                <button onclick="window.doLike('${post.uri}', '${post.cid}', ${postViewer.like ? `'${postViewer.like}'` : 'null'})" class="action-btn ${postViewer.like ? 'liked' : ''}">❤️ ${post.likeCount || 0}</button>
                 ${author.did === currentDid ? `<button onclick="window.deletePost('${post.uri}')" class="action-btn" style="margin-left:auto;">🗑️</button>` : ''}
             </div>
         </div>`;
@@ -308,15 +409,20 @@ async function sendPost() {
     try {
         btn.disabled = true;
         let imagesEmbed = undefined, finalEmbed = undefined;
+        
         if (selectedImages.length > 0) {
             const blobs = [];
-            for (const file of selectedImages) {
-                const compressed = await compressImage(file);
-                const res = await agent.uploadBlob(new Uint8Array(await compressed.arrayBuffer()), { encoding: 'image/jpeg' });
-                blobs.push({ image: res.data.blob, alt: "" });
+            for (const imgObj of selectedImages) {
+                const res = await agent.uploadBlob(new Uint8Array(await imgObj.blob.arrayBuffer()), { encoding: 'image/jpeg' });
+                blobs.push({ 
+                    image: res.data.blob, 
+                    alt: imgObj.alt || "", 
+                    aspectRatio: { width: imgObj.width, height: imgObj.height }
+                });
             }
             imagesEmbed = { $type: 'app.bsky.embed.images', images: blobs };
         }
+
         if (quoteTarget) {
             const recordEmbed = { $type: 'app.bsky.embed.record', record: quoteTarget };
             finalEmbed = imagesEmbed ? { $type: 'app.bsky.embed.recordWithMedia', media: imagesEmbed, record: recordEmbed } : recordEmbed;
@@ -328,9 +434,14 @@ async function sendPost() {
         if (replyTarget) postData.reply = { root: replyTarget.root, parent: { uri: replyTarget.uri, cid: replyTarget.cid } };
 
         await agent.post(postData);
+        localStorage.removeItem('aerune_draft_text');
         resetPostForm();
         setTimeout(fetchTimeline, 500);
-    } catch (e) { alert(t('post_failed')); } finally { btn.disabled = false; }
+    } catch (e) { 
+        alert(t('post_failed')); 
+    } finally { 
+        btn.disabled = false; 
+    }
 }
 
 window.deletePost = async (uri) => {
@@ -354,35 +465,68 @@ async function compressImage(file, maxSize = 2000) {
                 const canvas = document.createElement('canvas');
                 let w = img.width, h = img.height;
                 if (w > maxSize || h > maxSize) { if (w > h) { h *= maxSize / w; w = maxSize; } else { w *= maxSize / h; h = maxSize; } }
+                w = Math.round(w); h = Math.round(h);
                 canvas.width = w; canvas.height = h;
                 const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, w, h);
-                canvas.toBlob(blob => resolve(blob), 'image/jpeg', 0.8);
+                canvas.toBlob(blob => resolve({ blob, width: w, height: h }), 'image/jpeg', 0.85);
             };
         };
     });
 }
 
+async function processIncomingImages(files) {
+    if (files.length === 0) return;
+    for (const file of files) {
+        if (selectedImages.length >= 4) break;
+        const compressed = await compressImage(file);
+        selectedImages.push({
+            id: Date.now() + Math.random(),
+            file: file,
+            url: URL.createObjectURL(file),
+            blob: compressed.blob,
+            width: compressed.width,
+            height: compressed.height,
+            alt: ""
+        });
+    }
+    updateImagePreview();
+}
+
 function updateImagePreview() {
     if (!els.imagePreviewContainer) return;
     els.imagePreviewContainer.innerHTML = '';
-    selectedImages.forEach((file, index) => {
-        const img = document.createElement('img'); img.src = URL.createObjectURL(file);
-        img.className = 'preview-thumb'; img.title = "クリックで削除";
-        img.onclick = () => { selectedImages.splice(index, 1); updateImagePreview(); };
-        els.imagePreviewContainer.appendChild(img);
+    selectedImages.forEach((imgObj, index) => {
+        const wrap = document.createElement('div');
+        wrap.className = 'img-preview-wrap';
+        wrap.innerHTML = `
+            <img src="${imgObj.url}">
+            <div class="img-controls">
+                <button onclick="window.moveImg(${index}, -1); event.stopPropagation();" ${index === 0 ? 'disabled' : ''}>◀</button>
+                <input type="text" placeholder="ALT" value="${imgObj.alt}" onchange="window.updateAlt(${index}, this.value)" onclick="event.stopPropagation();">
+                <button onclick="window.moveImg(${index}, 1); event.stopPropagation();" ${index === selectedImages.length - 1 ? 'disabled' : ''}>▶</button>
+                <button onclick="window.removeImg(${index}); event.stopPropagation();" style="color:#ff6b6b; font-weight:bold;">✖</button>
+            </div>
+        `;
+        els.imagePreviewContainer.appendChild(wrap);
     });
 }
 
+window.moveImg = (index, dir) => {
+    const temp = selectedImages[index];
+    selectedImages[index] = selectedImages[index + dir];
+    selectedImages[index + dir] = temp;
+    updateImagePreview();
+};
+window.updateAlt = (index, val) => { selectedImages[index].alt = val; };
+window.removeImg = (index) => { selectedImages.splice(index, 1); updateImagePreview(); };
+
 window.prepareReply = (uri, cid, handle, rootUri, rootCid) => {
-    resetPostForm();
     replyTarget = { uri, cid, root: { uri: rootUri || uri, cid: rootCid || cid } };
     els.postInput.placeholder = t('reply_placeholder', handle);
-    els.postInput.value = ''; 
     els.postInput.focus();
 };
 
 window.prepareQuote = (uri, cid, handle, text) => {
-    resetPostForm();
     quoteTarget = { uri, cid };
     els.quotePreview.classList.remove('hidden');
     els.quotePreview.innerHTML = `<span class="quote-preview-close" onclick="resetPostForm()">×</span><strong>@${handle}</strong>: ${text.substring(0, 60)}...`;
@@ -390,8 +534,7 @@ window.prepareQuote = (uri, cid, handle, text) => {
 };
 
 window.prepareProfileReply = (handle) => {
-    resetPostForm();
-    els.postInput.value = `@${handle} `;
+    els.postInput.value = `@${handle} ` + els.postInput.value;
     els.postInput.focus();
 };
 
@@ -426,20 +569,36 @@ async function fetchNotifications() {
             
             div.onclick = () => {
                 if (window.getSelection().toString().length > 0) return;
-                
-                if (n.reason === 'follow') {
-                    window.loadProfile(n.author.handle);
-                } else if (n.reasonSubject || n.uri) {
-                    window.loadThread(n.reasonSubject || n.uri);
-                }
+                if (n.reason === 'follow') window.loadProfile(n.author.handle);
+                else if (n.reasonSubject || n.uri) window.loadThread(n.reasonSubject || n.uri);
             };
+
+            // ★ 通知欄での右クリックメニュー
+            div.addEventListener('contextmenu', (e) => {
+                e.preventDefault(); e.stopPropagation();
+                if (window.getSelection().toString().length > 0) return;
+
+                const authorViewer = n.author.viewer || {};
+                const isMe = n.author.did === agent.session.did;
+                
+                let opts = [];
+                if (n.reason !== 'follow' && (n.reasonSubject || n.uri)) {
+                    opts.push({ label: t('nav_thread'), action: () => window.loadThread(n.reasonSubject || n.uri) });
+                }
+                opts.push({ label: t('ctx_profile'), action: () => window.loadProfile(n.author.handle) });
+
+                if (!isMe) {
+                    opts.push({ divider: true });
+                    opts.push({ label: authorViewer.following ? t('ctx_unfollow') : t('ctx_follow'), action: () => window.toggleFollow(n.author.did, authorViewer.following) });
+                    opts.push({ label: authorViewer.muted ? t('ctx_unmute') : t('ctx_mute'), action: () => window.toggleMute(n.author.did, authorViewer.muted) });
+                    opts.push({ label: authorViewer.blocking ? t('ctx_unblock') : t('ctx_block'), action: () => window.toggleBlock(n.author.did, authorViewer.blocking), color: '#d93025' });
+                }
+                showContextMenu(e.pageX, e.pageY, opts);
+            });
             
             let previewText = '';
-            if (n.reason === 'like' || n.reason === 'repost') {
-                previewText = postMap[n.reasonSubject] || '';
-            } else if (n.reason === 'reply' || n.reason === 'quote' || n.reason === 'mention') {
-                previewText = n.record?.text || '';
-            }
+            if (n.reason === 'like' || n.reason === 'repost') previewText = postMap[n.reasonSubject] || '';
+            else if (n.reason === 'reply' || n.reason === 'quote' || n.reason === 'mention') previewText = n.record?.text || '';
             
             const preview = previewText ? `<div class="post-text" style="color:gray; font-size:0.85em; margin-top:4px; padding:4px 8px; border-left:2px solid #ddd;">${linkify(previewText)}</div>` : '';
             div.innerHTML = `<img src="${n.author.avatar || ''}" class="post-avatar"> <div class="post-content"><strong>${n.author.displayName || n.author.handle}</strong> <span>${t('notif_' + n.reason)}</span>${preview}</div>`;
@@ -483,9 +642,12 @@ window.loadProfile = async (actor, isBack = false) => {
     try {
         const res = await agent.getProfile({ actor });
         const p = res.data;
+        
         const dmBtn = p.did !== agent.session.did ? `<button onclick="window.startDirectMessage('${p.did}')" class="sidebar-action-btn" style="width:auto; padding:5px 15px; margin-right:10px;">${t('send_dm')}</button>` : '';
-        const replyBtn = `<button onclick="window.prepareProfileReply('${p.handle}')" class="sidebar-action-btn" style="width:auto; padding:5px 15px;">${t('profile_reply')}</button>`;
-        const actionBtns = p.did !== agent.session.did ? `<div style="margin-top:15px;">${dmBtn}${replyBtn}</div>` : '';
+        const replyBtn = `<button onclick="window.prepareProfileReply('${p.handle}')" class="sidebar-action-btn" style="width:auto; padding:5px 15px; margin-right:10px;">${t('profile_reply')}</button>`;
+        const followBtn = p.did !== agent.session.did ? `<button onclick="window.toggleFollow('${p.did}', '${p.viewer?.following || ''}')" class="sidebar-action-btn" style="width:auto; padding:5px 15px; background:${p.viewer?.following ? '#ccc' : 'var(--bsky-blue)'};">${p.viewer?.following ? t('ctx_unfollow') : t('ctx_follow')}</button>` : '';
+        const actionBtns = p.did !== agent.session.did ? `<div style="margin-top:15px; display:flex; gap:8px; flex-wrap:wrap;">${dmBtn}${replyBtn}${followBtn}</div>` : '';
+        
         const rel = p.viewer?.following && p.viewer?.followedBy ? `<span class="relationship-badge">${t('mutual')}</span>` : (p.viewer?.following ? `<span class="relationship-badge">${t('following')}</span>` : (p.viewer?.followedBy ? `<span class="relationship-badge">${t('follow_me')}</span>` : ''));
         
         container.innerHTML = `<img src="${p.banner || ''}" style="width:100%; height:150px; object-fit:cover;"><div style="padding:20px; position:relative;"><img src="${p.avatar || ''}" style="width:80px; height:80px; border-radius:50%; border:4px solid white; position:absolute; top:-40px;"><div style="margin-top:40px;"><div style="font-size:20px; font-weight:bold;">${p.displayName || p.handle}${rel}</div><div style="color:gray;">@${p.handle}</div><div style="margin-top:10px; word-break: break-word;">${linkify(p.description || '')}</div>${actionBtns}</div></div>`;
@@ -511,14 +673,86 @@ window.loadProfile = async (actor, isBack = false) => {
 
                     feedItems = feedItems.filter(item => item.post.uri !== p.pinnedPost.uri);
                 }
-            } catch (err) {
-                console.error("Failed to load pinned post", err);
-            }
+            } catch (err) { console.error("Failed to load pinned post", err); }
         }
 
         renderPosts(feedItems, timelineContainer);
     } catch (e) { container.innerHTML = 'Failed to load profile.'; }
 };
+
+window.toggleFollow = async (did, followingUri) => {
+    try {
+        if (followingUri) await agent.deleteFollow(followingUri);
+        else await agent.follow(did);
+        if (currentState?.type === 'profile') window.loadProfile(did, true);
+    } catch(e) { alert("Failed"); }
+};
+window.toggleBlock = async (did, blockingUri) => {
+    try {
+        if (blockingUri) await agent.app.bsky.graph.block.delete({ repo: agent.session.did, rkey: blockingUri.split('/').pop() });
+        else await agent.app.bsky.graph.block.create({ repo: agent.session.did }, { subject: did, createdAt: new Date().toISOString() });
+        if (currentState?.type === 'settings') loadModerationList('blocks');
+        else alert(t('action_success'));
+    } catch(e) { alert("Failed"); }
+};
+window.toggleMute = async (did, isMuted) => {
+    try {
+        if (isMuted) await agent.unmute(did);
+        else await agent.mute(did);
+        if (currentState?.type === 'settings') loadModerationList('mutes');
+        else alert(t('action_success'));
+    } catch(e) { alert("Failed"); }
+};
+window.togglePin = async (post) => {
+    try {
+        const repo = agent.session.did;
+        const res = await agent.com.atproto.repo.getRecord({ repo, collection: 'app.bsky.actor.profile', rkey: 'self' });
+        const record = res.data.value;
+        if (record.pinnedPost && record.pinnedPost.uri === post.uri) {
+            delete record.pinnedPost;
+        } else {
+            record.pinnedPost = { uri: post.uri, cid: post.cid };
+        }
+        await agent.com.atproto.repo.putRecord({ repo, collection: 'app.bsky.actor.profile', rkey: 'self', record });
+        alert(t('action_success'));
+        if (currentState?.type === 'profile') window.loadProfile(agent.session.handle, true);
+    } catch (e) { alert("Failed to pin/unpin"); }
+};
+
+async function loadModerationList(type) {
+    const container = document.getElementById('moderation-list-container');
+    container.innerHTML = '<div style="padding:10px;">Loading...</div>';
+    try {
+        let items = [];
+        if (type === 'blocks') {
+            const res = await agent.app.bsky.graph.getBlocks({ limit: 50 });
+            items = res.data.blocks.map(b => ({ did: b.did, handle: b.handle, name: b.displayName, uri: b.viewer.blocking }));
+        } else {
+            const res = await agent.app.bsky.graph.getMutes({ limit: 50 });
+            items = res.data.mutes.map(m => ({ did: m.did, handle: m.handle, name: m.displayName, isMuted: m.viewer.muted }));
+        }
+        container.innerHTML = '';
+        if (items.length === 0) container.innerHTML = '<div style="padding:10px;">No accounts found.</div>';
+        
+        items.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'user-list-item';
+            div.innerHTML = `
+                <div><strong>${item.name || item.handle}</strong> <span style="color:gray;">@${item.handle}</span></div>
+                <button class="sidebar-action-btn" style="width:auto; padding:4px 8px;">${type === 'blocks' ? t('ctx_unblock') : t('ctx_unmute')}</button>
+            `;
+            div.querySelector('button').onclick = () => {
+                if (type === 'blocks') window.toggleBlock(item.did, item.uri);
+                else window.toggleMute(item.did, item.isMuted);
+            };
+            container.appendChild(div);
+        });
+    } catch(e) { container.innerHTML = '<div style="padding:10px;">Failed to load.</div>'; }
+}
+
+document.getElementById('btn-load-mutes')?.addEventListener('click', () => loadModerationList('mutes'));
+document.getElementById('btn-load-blocks')?.addEventListener('click', () => loadModerationList('blocks'));
+
 
 function getChatAgent() { return agent.withProxy('bsky_chat', 'did:web:api.bsky.chat'); }
 async function fetchConvos() {
@@ -585,7 +819,6 @@ function switchView(viewId, activeDiv) {
     document.querySelectorAll('.nav-links li').forEach(li => li.classList.remove('active'));
     document.getElementById(`nav-${viewId}`)?.classList.add('active');
 
-    // ★ 修正: chat または settings の時に投稿欄を隠す
     if (els.dropZone) {
         els.dropZone.style.display = (viewId === 'chat' || viewId === 'settings') ? 'none' : '';
     } else if (els.postInput && els.postInput.parentElement) {
@@ -665,11 +898,14 @@ document.getElementById('logout-btn')?.addEventListener('click', async () => {
 document.getElementById('settings-save-btn')?.addEventListener('click', () => {
     const newLang = document.getElementById('setting-lang').value;
     const newLimit = parseInt(document.getElementById('setting-limit').value) || 30;
+    const newBlur = document.getElementById('setting-nsfw').checked;
     
     localStorage.setItem('aerune_lang', newLang);
     localStorage.setItem('aerune_post_limit', newLimit.toString());
+    localStorage.setItem('aerune_nsfw_blur', newBlur.toString());
     
     currentLang = newLang;
+    nsfwBlur = newBlur;
     postLimit = newLimit > 100 ? 100 : (newLimit < 10 ? 10 : newLimit);
     document.getElementById('setting-limit').value = postLimit;
     
@@ -692,13 +928,12 @@ window.addEventListener('keydown', (e) => {
     }
 });
 
-window.addEventListener('paste', (e) => {
+window.addEventListener('paste', async (e) => {
     if (e.clipboardData && e.clipboardData.files.length > 0) {
         const files = Array.from(e.clipboardData.files).filter(f => f.type.startsWith('image/'));
         if (files.length > 0) {
             e.preventDefault();
-            selectedImages = [...selectedImages, ...files].slice(0, 4);
-            updateImagePreview();
+            await processIncomingImages(files);
         }
     }
 });
@@ -706,7 +941,10 @@ window.addEventListener('paste', (e) => {
 window.doLike = async (uri, cid, likeUri) => { try { if (likeUri) await agent.deleteLike(likeUri); else await agent.like(uri, cid); fetchTimeline(); } catch(e){} };
 window.doRepost = async (uri, cid, repostUri) => { try { if (repostUri) await agent.deleteRepost(repostUri); else await agent.repost(uri, cid); fetchTimeline(); } catch(e){} };
 window.openModal = (url) => { document.getElementById('modal-image').src = url; document.getElementById('image-modal').classList.remove('hidden'); };
-document.getElementById('image-input')?.addEventListener('change', (e) => { selectedImages = [...selectedImages, ...Array.from(e.target.files)].slice(0, 4); updateImagePreview(); });
+document.getElementById('image-input')?.addEventListener('change', async (e) => { 
+    await processIncomingImages(Array.from(e.target.files)); 
+    e.target.value = ''; 
+});
 
 const sendChatMessage = async () => {
     const input = document.getElementById('chat-msg-input'); 
