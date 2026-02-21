@@ -345,3 +345,19 @@ body {
 .modal-close-btn { position: absolute; top: 10px; right: 15px; font-size: 28px; cursor: pointer; color: #999; }
 .embedded-quote { margin-top: 10px; padding: 12px; border: 1px solid var(--border-color); border-radius: 10px; background: #fafafa; cursor: pointer; }
 .notif-badge { position: absolute; top: 10px; right: 5px; width: 10px; height: 10px; background: #ff4d4f; border-radius: 50%; border: 2px solid #fff; }
+.svg-icon { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; min-width: 18px; flex-shrink: 0; vertical-align: middle; margin-right: 4px; opacity: 0.6; transition: all 0.2s; }
+.svg-icon svg { width: 100%; height: 100%; display: block; }
+.action-btn { display: inline-flex; align-items: center; background: transparent; border: none; cursor: pointer; padding: 4px 8px; color: gray; font-size: 0.9em; }
+.action-btn:hover .svg-icon { opacity: 1; transform: scale(1.1); }
+.action-btn.liked { color: #e0245e !important; }
+.action-btn.liked .svg-icon { opacity: 1; color: #e0245e; }
+.action-btn.liked .svg-icon svg path { fill: #e0245e !important; stroke: #e0245e !important; }
+.action-btn.reposted { color: #17bf63 !important; }
+.action-btn.reposted .svg-icon { opacity: 1; color: #17bf63; }
+.action-btn.reposted .svg-icon svg path { stroke: #17bf63 !important; }
+.action-btn.bookmarked { color: var(--bsky-blue) !important; }
+.action-btn.bookmarked .svg-icon { opacity: 1; color: var(--bsky-blue); }
+.action-btn.bookmarked .svg-icon svg path { fill: var(--bsky-blue) !important; stroke: var(--bsky-blue) !important; }
+.ctx-menu-item .svg-icon { width: 16px; height: 16px; min-width: 16px; flex-shrink: 0; margin-right: 8px; margin-bottom: 2px; opacity: 1; }
+.thread-line { position: relative; }
+.thread-line::before { content: ''; position: absolute; left: 38px; top: 62px; bottom: -12px; width: 2px; background: #e5e7eb; z-index: 1; }
