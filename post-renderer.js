@@ -1,4 +1,4 @@
-// post-renderer.js (v2.0.1: timestamp display, render optimization)
+// post-renderer.js (v2.0.2: timestamp display, render optimization)
 const { escAttr, renderRichText } = require('./utils.js');
 
 // Stores for event delegation
@@ -110,9 +110,15 @@ function buildEmbed(embed, imgClass) {
     if (t === 'app.bsky.embed.external#view' && embed.external) {
         const ext = embed.external;
         const url = escAttr(ext.uri || '');
-        const thumb = ext.thumb
-            ? `<img src="${escAttr(ext.thumb)}" style="width:100%;max-height:200px;object-fit:cover;border-radius:6px;margin-bottom:6px;" loading="lazy" decoding="async">`
-            : '';
+        let thumb = '';
+        if (ext.thumb) {
+            const isNsfw = imgClass.includes('nsfw-blur');
+            if (isNsfw) {
+                thumb = `<img src="${escAttr(ext.thumb)}" class="nsfw-blur" style="width:100%;max-height:200px;object-fit:cover;border-radius:6px;margin-bottom:6px;" loading="lazy" decoding="async" title="クリックでぼかし解除" onclick="if(this.classList.contains('nsfw-blur')){this.classList.remove('nsfw-blur');event.stopPropagation();}">`;
+            } else {
+                thumb = `<img src="${escAttr(ext.thumb)}" style="width:100%;max-height:200px;object-fit:cover;border-radius:6px;margin-bottom:6px;" loading="lazy" decoding="async">`;
+            }
+        }
         return `<div class="embedded-quote" style="cursor:pointer;" data-ext="${url}">${thumb}<div style="font-weight:bold;font-size:.9em;">${escAttr(ext.title||'')}</div><div style="color:gray;font-size:.8em;">${escAttr(ext.description||'')}</div><div style="color:var(--bsky-blue);font-size:.8em;margin-top:4px;">${escAttr(ext.uri||'')}</div></div>`;
     }
     return '';
