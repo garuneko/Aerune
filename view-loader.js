@@ -213,10 +213,17 @@ class ViewLoader {
                     const pinRes = await this.api.getPosts([p.pinnedPost.uri]);
                     if (pinRes.data.posts.length) {
                         const pinnedEl = createPostElement(pinRes.data.posts[0], ctx);
-                        const badge = document.createElement('div');
-                        badge.style.marginBottom = '8px';
-                        badge.innerHTML = `<span style="font-size:.85em;color:gray;font-weight:bold;">${ctx.getIcon('pin')} ${ctx.t('pinned_post')}</span>`;
-                        pinnedEl.insertBefore(badge, pinnedEl.firstChild);
+                        
+                        // .post-content の中にバッジを挿入してリポストと同じレイアウトにする
+                        const contentDiv = pinnedEl.querySelector('.post-content');
+                        if (contentDiv) {
+                            const badge = document.createElement('div');
+                            // リポスト表示と同じフォントサイズ・マージン・色を適用
+                            badge.style.cssText = 'font-size:.85em;color:gray;margin-bottom:4px;font-weight:bold;';
+                            badge.innerHTML = `${ctx.getIcon('pin')} ${ctx.t('pinned_post')}`;
+                            contentDiv.insertBefore(badge, contentDiv.firstChild);
+                        }
+                        
                         pinnedEl.style.border = '2px solid var(--bsky-blue)';
                         pinnedEl.style.backgroundColor = 'rgba(0,133,255,.05)';
                         pinned.appendChild(pinnedEl);

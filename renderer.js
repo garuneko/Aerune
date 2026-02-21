@@ -1,4 +1,4 @@
-// renderer.js (optimized)
+// renderer.js 
 // Aerune メインエントリーポイント
 
 const { ipcRenderer, shell } = require('electron');
@@ -25,6 +25,7 @@ let currentLang = localStorage.getItem('aerune_lang') || (navigator.language.sta
 let postLimit = Math.max(10, Math.min(100, parseInt(localStorage.getItem('aerune_post_limit')) || 30));
 let nsfwBlur = localStorage.getItem('aerune_nsfw_blur') !== 'false';
 let showBookmarksConfig = localStorage.getItem('aerune_show_bookmarks') !== 'false';
+ window.aeruneTimeFormat = localStorage.getItem('aerune_time_format') || 'relative';
 
 // ─── i18n ────────────────────────────────────────────────────────
 const t = (key, ...args) => {
@@ -39,7 +40,7 @@ const getIcon = (key) => ICON_CACHE[key] || '';
 const getRenderContext = () => ({
     api, t, getIcon, nsfwBlur,
     aeruneBookmarks: window.aeruneBookmarks,
-    renderRichText
+    timeFormat: window.aeruneTimeFormat || 'relative',
 });
 
 // ─── スタイル (一度だけ注入) ──────────────────────────────────────
@@ -56,20 +57,49 @@ function updateBackBtn() {
 }
 
 function goBack() {
-    const prev = nav.pop();
+    const prev = nav.pop(); // v2.0.2: 引数なし。_scrollTop を含む状態オブジェクトが返る
     if (!prev) return;
     updateBackBtn();
-    const map = {
-        home:          () => { switchView('home', els.timelineDiv); viewLoader.fetchTimeline(postLimit); },
-        notifications: () => { switchView('notifications', els.notifDiv); viewLoader.fetchNotifications(postLimit); },
-        chat:          () => { switchView('chat', els.chatView); fetchConvos(); },
-        search:        () => switchView('search', els.searchView),
-        profile:       () => window.loadProfile(prev.actor, true),
-        thread:        () => window.loadThread(prev.uri, true),
-        settings:      () => switchView('settings', els.settingsView),
-        bookmarks:     () => { switchView('bookmarks', els.bookmarksView); viewLoader.fetchBookmarks(postLimit); }
+
+    // rAF x2 で renderPosts の描画完了後にスクロール位置を復元
+    const restoreScroll = (container) => {
+        if (!container || prev._scrollTop == null) return;
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+            container.scrollTop = prev._scrollTop;
+        }));
     };
-    map[prev.type]?.();
+
+    switch (prev.type) {
+        case 'home':
+            switchView('home', els.timelineDiv);
+            viewLoader.fetchTimeline(postLimit).then(() => restoreScroll(els.timelineDiv));
+            break;
+        case 'notifications':
+            switchView('notifications', els.notifDiv);
+            viewLoader.fetchNotifications(postLimit).then(() => restoreScroll(els.notifDiv));
+            break;
+        case 'chat':
+            switchView('chat', els.chatView);
+            fetchConvos();
+            break;
+        case 'search':
+            switchView('search', els.searchView);
+            restoreScroll(document.getElementById('search-results'));
+            break;
+        case 'profile':
+            window.loadProfile(prev.actor, true);
+            break;
+        case 'thread':
+            window.loadThread(prev.uri, true);
+            break;
+        case 'settings':
+            switchView('settings', els.settingsView);
+            break;
+        case 'bookmarks':
+            switchView('bookmarks', els.bookmarksView);
+            viewLoader.fetchBookmarks(postLimit).then(() => restoreScroll(els.bookmarksView));
+            break;
+    }
 }
 
 // ─── モジュール初期化 ─────────────────────────────────────────────
@@ -102,13 +132,13 @@ window.toggleBlock     = (d, b)        => actions.toggleBlock(d, b);
 window.togglePin       = post          => actions.togglePin(post);
 
 window.loadProfile = (actor, isBack = false) => {
-    if (!isBack) { nav.push({ type: 'profile', actor }); updateBackBtn(); }
+    if (!isBack) { nav.push({ type: 'profile', actor }, _activeView); updateBackBtn(); }
     switchView('profile', els.profileView);
     viewLoader.loadProfile(actor, postLimit);
 };
 
 window.loadThread = (uri, isBack = false) => {
-    if (!isBack) { nav.push({ type: 'thread', uri }); updateBackBtn(); }
+    if (!isBack) { nav.push({ type: 'thread', uri }, _activeView); updateBackBtn(); }
     switchView('thread', els.threadView);
     viewLoader.loadThread(uri);
 };
@@ -151,7 +181,7 @@ window.execSearch = async (q) => {
     if (!query) return;
     const si = document.getElementById('search-input');
     if (si) si.value = query;
-    nav.push({ type: 'search' }); updateBackBtn();
+    nav.push({ type: 'search' }, _activeView); updateBackBtn();
     switchView('search', els.searchView);
     try {
         const res = await api.searchPosts(query, postLimit);
@@ -658,7 +688,7 @@ const sendChatMessage = async () => {
 
 window.startDirectMessage = async (did) => {
     try {
-        nav.push({ type: 'chat' }); updateBackBtn();
+        nav.push({ type: 'chat' }, _activeView); updateBackBtn();
         switchView('chat', els.chatView);
         const [profile, convoRes] = await Promise.all([
             api.getProfile(did),
@@ -751,7 +781,7 @@ async function initApp() {
         const li = document.createElement('li');
         li.id = 'nav-bookmarks'; li.setAttribute('data-i18n', 'nav_bookmarks');
         li.textContent = t('nav_bookmarks');
-        li.onclick = () => { nav.push({ type: 'bookmarks' }); updateBackBtn(); switchView('bookmarks', els.bookmarksView); viewLoader.fetchBookmarks(postLimit); };
+        li.onclick = () => { nav.push({ type: 'bookmarks' }, _activeView); updateBackBtn(); switchView('bookmarks', els.bookmarksView); viewLoader.fetchBookmarks(postLimit); };
         li.style.display = showBookmarksConfig ? 'block' : 'none';
         get('nav-profile')?.parentNode.insertBefore(li, get('nav-profile').nextSibling);
     }
@@ -767,6 +797,36 @@ async function initApp() {
             (sib?.nextElementSibling ? h3.parentNode.insertBefore(bm, sib.nextElementSibling) : h3.parentNode.appendChild(bm));
         }
     }
+
+    // 設定画面 時刻フォーマット切り替えUI（動的挿入）
+    if (els.settingsView && !get('setting-time-format-wrap')) {
+        const wrap = document.createElement('div');
+        wrap.id = 'setting-time-format-wrap';
+        wrap.style.cssText = 'margin-bottom:20px;';
+        wrap.innerHTML =
+            `<div style="font-weight:bold;margin-bottom:8px;" data-i18n="settings_time_format">${t('settings_time_format')}</div>` +
+            `<div style="display:flex;gap:16px;">` +
+            `<label style="cursor:pointer;display:flex;align-items:center;gap:6px;">` +
+            `<input type="radio" name="aerune_time_format" value="relative" ${(window.aeruneTimeFormat||'relative')==='relative'?'checked':''}>` +
+            `<span data-i18n="settings_time_relative">${t('settings_time_relative')}</span>` +
+            `</label>` +
+            `<label style="cursor:pointer;display:flex;align-items:center;gap:6px;">` +
+            `<input type="radio" name="aerune_time_format" value="absolute" ${window.aeruneTimeFormat==='absolute'?'checked':''}>` +
+            `<span data-i18n="settings_time_absolute">${t('settings_time_absolute')}</span>` +
+            `</label>` +
+            `</div>`;
+        // ブックマークトグルの後 or settingsView末尾に追加
+        const bmWrap = get('setting-bookmark-tab')?.closest('div');
+        if (bmWrap) {
+            if (bmWrap.nextElementSibling) {
+                bmWrap.parentNode.insertBefore(wrap, bmWrap.nextElementSibling);
+            } else {
+                bmWrap.parentNode.appendChild(wrap);
+            }
+        } else {
+            els.settingsView.appendChild(wrap);
+        }
+        }
 
     // 設定初期値
     const sl = get('setting-lang'),  sli = get('setting-limit'),  sn = get('setting-nsfw');
@@ -810,12 +870,12 @@ async function initApp() {
     get('login-cancel-btn')?.addEventListener('click', () => { els.loginForm.classList.add('hidden'); if (els.app) els.app.style.opacity = '1'; });
     get('post-btn')?.addEventListener('click', sendPost);
 
-    get('nav-home')?.addEventListener('click',          () => { nav.push({type:'home'}); updateBackBtn(); switchView('home', els.timelineDiv); viewLoader.fetchTimeline(postLimit); });
-    get('nav-notifications')?.addEventListener('click', () => { nav.push({type:'notifications'}); updateBackBtn(); switchView('notifications', els.notifDiv); viewLoader.fetchNotifications(postLimit); });
-    get('nav-chat')?.addEventListener('click',          () => { nav.push({type:'chat'}); updateBackBtn(); switchView('chat', els.chatView); fetchConvos(); });
-    get('nav-search')?.addEventListener('click',        () => { nav.push({type:'search'}); updateBackBtn(); switchView('search', els.searchView); });
+    get('nav-home')?.addEventListener('click',          () => { nav.push({type:'home'}, _activeView); updateBackBtn(); switchView('home', els.timelineDiv); viewLoader.fetchTimeline(postLimit); });
+    get('nav-notifications')?.addEventListener('click', () => { nav.push({type:'notifications'}, _activeView); updateBackBtn(); switchView('notifications', els.notifDiv); viewLoader.fetchNotifications(postLimit); });
+    get('nav-chat')?.addEventListener('click',          () => { nav.push({type:'chat'}, _activeView); updateBackBtn(); switchView('chat', els.chatView); fetchConvos(); });
+    get('nav-search')?.addEventListener('click',        () => { nav.push({type:'search'}, _activeView); updateBackBtn(); switchView('search', els.searchView); });
     get('nav-profile')?.addEventListener('click',       () => window.loadProfile(api.session.did));
-    get('nav-settings')?.addEventListener('click',      () => { nav.push({type:'settings'}); updateBackBtn(); switchView('settings', els.settingsView); });
+    get('nav-settings')?.addEventListener('click',      () => { nav.push({type:'settings'}, _activeView); updateBackBtn(); switchView('settings', els.settingsView); });
 
     get('search-exec-btn')?.addEventListener('click', () => window.execSearch());
     get('search-input')?.addEventListener('keydown', e => { if (e.key === 'Enter') window.execSearch(); });
@@ -833,13 +893,16 @@ async function initApp() {
         const nli = Math.min(100, Math.max(10, parseInt(get('setting-limit')?.value) || 30));
         const nb  = get('setting-nsfw')?.checked ?? nsfwBlur;
         const nbm = get('setting-bookmark-tab')?.checked ?? showBookmarksConfig;
+        const ntf = document.querySelector('input[name="aerune_time_format"]:checked')?.value || window.aeruneTimeFormat || 'relative';
 
         localStorage.setItem('aerune_lang',           nl);
         localStorage.setItem('aerune_post_limit',     nli.toString());
         localStorage.setItem('aerune_nsfw_blur',      nb.toString());
         localStorage.setItem('aerune_show_bookmarks', nbm.toString());
+        localStorage.setItem('aerune_time_format',    ntf);
 
         currentLang = nl; nsfwBlur = nb; showBookmarksConfig = nbm; postLimit = nli;
+        window.aeruneTimeFormat = ntf;
         const sli2 = get('setting-limit'); if (sli2) sli2.value = nli;
         get('nav-bookmarks')?.style.setProperty('display', nbm ? 'block' : 'none');
         applyTranslations();

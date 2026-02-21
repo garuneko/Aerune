@@ -1,4 +1,4 @@
-// constants.js (optimized)
+// constants.js (v2.0.1)
 // SVGをspanキャッシュとして事前生成し、getIconの都度生成コストをゼロに
 
 const SVG_ICONS = {
@@ -13,7 +13,7 @@ const SVG_ICONS = {
     image:  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><path d="M7.5 14l2.5-2.8 3.2 3.6 2.2-2.4 2.6 2.9"/><path d="M12 4.5v6"/><path d="M9.8 7l2.2-2.2L14.2 7"/></svg>`
 };
 
-// 事前に生成済みのHTML文字列をキャッシュ（毎回テンプレートリテラルを作らない）
+// 事前に生成済みのHTML文字列をキャッシュ
 const ICON_CACHE = Object.create(null);
 for (const [k, v] of Object.entries(SVG_ICONS)) {
     ICON_CACHE[k] = `<span class="svg-icon">${v}</span>`;
@@ -37,6 +37,7 @@ const translations = {
         settings_lang:"言語 / Language",settings_limit:"TLや検索の読み込み件数 (10〜100)",settings_save:"保存",settings_saved:"設定を保存しました",
         settings_nsfw:"NSFW画像にぼかしを入れる",settings_mutes:"ミュート中のアカウント",settings_blocks:"ブロック中のアカウント",
         settings_bookmark_tab:"サイドバーにブックマークを表示する",
+        settings_time_format:"投稿時刻の表示形式",settings_time_relative:"相対表示（〇分前）",settings_time_absolute:"絶対表示（日時）",
         pinned_post:"固定されたポスト",
         ctx_reply:"返信",ctx_repost:"リポスト",ctx_quote:"引用",ctx_profile:"プロフィールを見る",
         ctx_pin:"固定ポストに設定",ctx_unpin:"固定ポストを解除",
@@ -68,6 +69,7 @@ const translations = {
         settings_lang:"言語 / Language",settings_limit:"Timeline limit (10-100)",settings_save:"Save",settings_saved:"Settings saved",
         settings_nsfw:"Blur NSFW Images",settings_mutes:"Muted Accounts",settings_blocks:"Blocked Accounts",
         settings_bookmark_tab:"Show Bookmarks in sidebar",
+        settings_time_format:"Post time display",settings_time_relative:"Relative (X min ago)",settings_time_absolute:"Absolute (date & time)",
         pinned_post:"Pinned Post",
         ctx_reply:"Reply",ctx_repost:"Repost",ctx_quote:"Quote",ctx_profile:"View Profile",
         ctx_pin:"Pin Post",ctx_unpin:"Unpin Post",
