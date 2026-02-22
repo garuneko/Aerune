@@ -393,7 +393,7 @@ function updateImagePreview() {
             `<img src="${obj.url}" title="クリックで削除" style="cursor:pointer;" onclick="window.removeImg(${i});event.stopPropagation();">` +
             `<div class="img-controls">` +
             `<button onclick="window.moveImg(${i},-1);event.stopPropagation();" ${i===0?'disabled':''}>◀</button>` +
-            `<input type="text" placeholder="ALT" value="${obj.alt}" onchange="window.updateAlt(${i},this.value)" onclick="event.stopPropagation();">` +
+            `<input type="text" placeholder="ALT" value="${obj.alt}" oninput="window.updateAlt(${i},this.value)" onclick="event.stopPropagation();">` +
             `<button onclick="window.moveImg(${i},1);event.stopPropagation();" ${i===selectedImages.length-1?'disabled':''}>▶</button>` +
             `<button onclick="window.removeImg(${i});event.stopPropagation();" style="color:#ff6b6b;font-weight:bold;">✖</button>` +
             `</div>`;
@@ -435,11 +435,12 @@ async function sendPost() {
         let imagesEmbed, finalEmbed;
 
         if (selectedImages.length) {
-            // 画像を並列アップロード
-            const blobs = await Promise.all(selectedImages.map(async obj => {
+            // サーバー負荷と容量エラーを防ぐため1枚ずつ直列アップロード
+            const blobs = [];
+            for (const obj of selectedImages) {
                 const res = await api.uploadBlob(new Uint8Array(await obj.blob.arrayBuffer()));
-                return { image: res.data.blob, alt: obj.alt || '', aspectRatio: { width: obj.width, height: obj.height } };
-            }));
+                blobs.push({ image: res.data.blob, alt: obj.alt || '', aspectRatio: { width: obj.width, height: obj.height } });
+            }
             imagesEmbed = { $type: 'app.bsky.embed.images', images: blobs };
         }
 

@@ -21,10 +21,28 @@ async function compressImage(file, maxSize = 2000) {
                     if (w > h) { h = Math.round(h * maxSize / w); w = maxSize; }
                     else { w = Math.round(w * maxSize / h); h = maxSize; }
                 } else { w = Math.round(w); h = Math.round(h); }
+                
                 const canvas = document.createElement('canvas');
                 canvas.width = w; canvas.height = h;
                 canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-                canvas.toBlob(blob => resolve({ blob, width: w, height: h }), 'image/jpeg', 0.85);
+                
+                // ↓ここを修正
+                let quality = 0.85;
+                const TARGET_SIZE = 950000; 
+                
+                const checkSize = () => {
+                    canvas.toBlob(blob => {
+                        // 容量オーバーかつ画質をまだ下げられる場合は再エンコード
+                        if (blob.size > TARGET_SIZE && quality > 0.4) {
+                            quality -= 0.1;
+                            checkSize();
+                        } else {
+                            resolve({ blob, width: w, height: h });
+                        }
+                    }, 'image/jpeg', quality);
+                };
+                
+                checkSize();
             };
             img.src = ev.target.result;
         };

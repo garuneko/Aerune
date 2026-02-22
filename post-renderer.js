@@ -71,7 +71,9 @@ function formatTimestamp(isoString, timeFormat) {
 
 // ─── 画像レンダリング ────────────────────────────────────────────
 function renderImg(img, imgClass) {
-    return `<img src="${escAttr(img.thumb)}" data-fullsize="${escAttr(img.fullsize)}" data-act="open-image" data-url="${escAttr(img.fullsize)}" class="${imgClass}" style="${IMG_STYLE}" loading="lazy" decoding="async">`;
+    const altText = escAttr(img.alt || '');
+    // alt と title 属性を追加
+    return `<img src="${escAttr(img.thumb)}" alt="${altText}" title="${altText}" data-fullsize="${escAttr(img.fullsize)}" data-act="open-image" data-url="${escAttr(img.fullsize)}" class="${imgClass}" style="${IMG_STYLE}" loading="lazy" decoding="async">`;
 }
 
 function renderEmbedImages(images, imgClass) {
