@@ -50,7 +50,13 @@ const translations = {
         error_details:"【詳細なエラー理由】",network_check:"ネットワーク制限の可能性があります。ブラウザで原因を確認しますか？",
         post_too_long:"ポストが長すぎます。{0}文字オーバーしています。",
         no_bookmarks:"ブックマークはありません",
-        bookmark_failed:"ブックマークの操作に失敗しました。"
+        bookmark_failed:"ブックマークの操作に失敗しました。",
+        login_empty:"IDとパスワードを入力してください。",
+        login_app_pw_req:"Aeruneでのログインには、Bluesky公式で発行した「アプリパスワード」が必要です。\n（通常のログインパスワードは使えません）\n\nブラウザを開いて設定画面へ移動しますか？",
+        login_invalid:"ID（ハンドル名）またはパスワードが間違っています。\n入力内容をご確認ください。",
+        login_rate_limit:"ログイン試行回数が上限に達しました。\nしばらく時間を置いてから再度お試しください。",
+        login_network:"通信エラーが発生しました。\nネットワーク接続を確認してください。",
+        login_unknown:"原因を調べるためにブラウザ版を開きますか？"
     },
     en: {
         nav_home:"Home",nav_notifications:"Notifications",nav_search:"Search",nav_profile:"Profile",nav_thread:"Thread",nav_chat:"Chat",nav_settings:"Settings",nav_bookmarks:"Bookmarks",
@@ -82,7 +88,13 @@ const translations = {
         error_details:"[Error Details]",network_check:"Possible network restriction. Would you like to check in your browser?",
         post_too_long:"Post is too long. It exceeds the limit by {0} characters.",
         no_bookmarks:"No bookmarks found.",
-        bookmark_failed:"Failed to process bookmark."
+        bookmark_failed:"Failed to process bookmark.",
+        login_empty:"Please enter your ID and password.",
+        login_app_pw_req:"Aerune requires an 'App Password' generated from the official Bluesky settings.\n(Your regular login password will not work.)\n\nOpen browser to go to the settings page?",
+        login_invalid:"Incorrect ID (handle) or password.\nPlease check your input.",
+        login_rate_limit:"Rate limit exceeded.\nPlease wait a moment and try again.",
+        login_network:"A network error occurred.\nPlease check your connection.",
+        login_unknown:"Would you like to open the browser to investigate the cause?"
     }
 };
 

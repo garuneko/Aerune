@@ -514,6 +514,10 @@ async function login() {
     const id  = document.getElementById('id').value.trim();
     const pw  = document.getElementById('pw').value.trim();
     const btn = document.getElementById('login-btn');
+    
+    // 未入力チェック
+    if (!id || !pw) return alert(t('login_empty'));
+
     try {
         btn.disabled = true; btn.innerText = 'Connecting...';
         const res = await api.login(id, pw);
@@ -524,8 +528,27 @@ async function login() {
             await switchAccount(res.data.did);
         }
     } catch (e) {
-        const msg = `${t('login_failed')}\n\n${t('error_details')}\n${e.message || e}\n\n${t('network_check')}`;
-        if (confirm(msg)) shell.openExternal('https://bsky.app');
+        const errStr = String(e.message || e).toLowerCase();
+        
+        if (errStr.includes('app password')) {
+            // サードパーティ用アプリパスワードが必要な場合
+            if (confirm(t('login_app_pw_req'))) {
+                shell.openExternal('https://bsky.app/settings/app-passwords');
+            }
+        } else if (errStr.includes('invalid identifier or password') || errStr.includes('unauthorized') || errStr.includes('authentication required')) {
+            // IDかパスワード間違い
+            alert(t('login_invalid'));
+        } else if (errStr.includes('rate limit')) {
+            // 連続試行による制限
+            alert(t('login_rate_limit'));
+        } else if (errStr.includes('fetch') || errStr.includes('network') || errStr.includes('failed to fetch')) {
+            // オフライン・通信エラー
+            alert(t('login_network'));
+        } else {
+            // その他の未知のエラー
+            const msg = `${t('login_failed')}\n\n${t('error_details')}\n${e.message || e}\n\n${t('login_unknown')}`;
+            if (confirm(msg)) shell.openExternal('https://bsky.app');
+        }
     } finally {
         btn.disabled = false;
         btn.innerText = t('login_btn');
