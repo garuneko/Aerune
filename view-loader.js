@@ -9,13 +9,106 @@ class ViewLoader {
         this.els = els;
     }
 
-    async fetchTimeline(limit) {
+async fetchTimeline(limit) {
         try {
             const res = await this.api.getTimeline(limit);
-            renderPosts(res.data.feed, this.els.timelineDiv, this.getCtx());
+            
+            // 1. まず取得した全てのポストをURIキーでマップ化
+            const postMap = new Map();
+            for (const item of res.data.feed) {
+                if (!postMap.has(item.post.uri)) {
+                    postMap.set(item.post.uri, item);
+                }
+                if (item.reply && !item.reason) {
+                    if (item.reply.parent && !postMap.has(item.reply.parent.uri)) {
+                        postMap.set(item.reply.parent.uri, { post: item.reply.parent, reason: null });
+                    }
+                    if (item.reply.root && !postMap.has(item.reply.root.uri)) {
+                        postMap.set(item.reply.root.uri, { post: item.reply.root, reason: null });
+                    }
+                }
+            }
+
+            const newFeed = [];
+            const seenUris = new Set();
+            const myDid = this.api.session?.did;
+
+            for (const item of res.data.feed) {
+                if (seenUris.has(item.post.uri)) continue;
+
+                // 2. フォロー外が絡むリプライを厳格に除外
+                // 自分がポストしたもの以外で、親(parent)か大元(root)のどちらかがフォロー外ならスキップ
+                let shouldSkip = false;
+                if (item.reply && !item.reason) {
+                    const isMyPost = item.post.author.did === myDid;
+                    if (!isMyPost) {
+                        const pAuthor = item.reply.parent?.author;
+                        const rAuthor = item.reply.root?.author;
+                        
+                        // 親とルートが「自分」または「フォロー中」であるか判定
+                        const isParentValid = pAuthor && (pAuthor.did === myDid || !!pAuthor.viewer?.following);
+                        const isRootValid = rAuthor && (rAuthor.did === myDid || !!rAuthor.viewer?.following);
+                        
+                        if (!isParentValid || !isRootValid) {
+                            shouldSkip = true;
+                        }
+                    }
+                }
+
+                if (shouldSkip) {
+                    seenUris.add(item.post.uri);
+                    continue;
+                }
+
+                // 3. スレッドを上に遡って、親ポストのチェーンを構築
+                const threadChain = [];
+                let currentItem = item;
+                let hasInvalidAncestor = false;
+
+                while (currentItem.reply && !currentItem.reason) {
+                    const parentUri = currentItem.reply.parent?.uri;
+                    if (!parentUri) break;
+
+                    const parentItem = postMap.get(parentUri);
+                    if (!parentItem) break;
+
+                    if (seenUris.has(parentUri)) break;
+
+                    // 遡る過程でフォロー外を見つけたら、そのスレッド全体を破棄
+                    const pAuthor = parentItem.post.author;
+                    if (pAuthor.did !== myDid && !pAuthor.viewer?.following) {
+                        hasInvalidAncestor = true;
+                        break;
+                    }
+
+                    threadChain.unshift(parentItem); 
+                    currentItem = parentItem;
+                }
+
+                if (hasInvalidAncestor) {
+                    seenUris.add(item.post.uri);
+                    continue;
+                }
+
+                // 4. 構築した親チェーンを追加
+                for (const p of threadChain) {
+                    if (!seenUris.has(p.post.uri)) {
+                        newFeed.push(p);
+                        seenUris.add(p.post.uri);
+                    }
+                }
+
+                // 5. 自分自身を追加
+                if (!seenUris.has(item.post.uri)) {
+                    newFeed.push(item);
+                    seenUris.add(item.post.uri);
+                }
+            }
+
+            renderPosts(newFeed, this.els.timelineDiv, this.getCtx());
         } catch (e) { console.error('fetchTimeline:', e); }
     }
-
+    
     async fetchNotifications(limit) {
         try {
             const [notifRes] = await Promise.all([this.api.listNotifications(limit)]);
