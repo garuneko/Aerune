@@ -25,7 +25,7 @@ let currentLang = localStorage.getItem('aerune_lang') || (navigator.language.sta
 let postLimit = Math.max(10, Math.min(100, parseInt(localStorage.getItem('aerune_post_limit')) || 30));
 let nsfwBlur = localStorage.getItem('aerune_nsfw_blur') !== 'false';
 let showBookmarksConfig = localStorage.getItem('aerune_show_bookmarks') !== 'false';
- window.aeruneTimeFormat = localStorage.getItem('aerune_time_format') || 'relative';
+window.aeruneTimeFormat = localStorage.getItem('aerune_time_format') || 'relative';
 
 // ─── i18n ────────────────────────────────────────────────────────
 const t = (key, ...args) => {
@@ -57,11 +57,10 @@ function updateBackBtn() {
 }
 
 function goBack() {
-    const prev = nav.pop(); // v2.0.2: 引数なし。_scrollTop を含む状態オブジェクトが返る
+    const prev = nav.pop(); 
     if (!prev) return;
     updateBackBtn();
 
-    // rAF x2 で renderPosts の描画完了後にスクロール位置を復元
     const restoreScroll = (container) => {
         if (!container || prev._scrollTop == null) return;
         requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -192,7 +191,6 @@ window.execSearch = async (q) => {
 // ─── コンテキストメニュー ─────────────────────────────────────────
 window.showContextMenu = (x, y, items) => {
     if (!els.ctxMenu) return;
-    // Fragment で一括構築
     const frag = document.createDocumentFragment();
     for (const item of items) {
         if (item.divider) {
@@ -216,9 +214,7 @@ window.showContextMenu = (x, y, items) => {
 
 // ─── イベント委譲（一括登録） ─────────────────────────────────────
 function installDelegates() {
-    // click: リンク・ボタン
     document.addEventListener('click', e => {
-        // a[data-*] 系リンク
         const a = e.target.closest('a[data-ext],a[data-search],a[data-profile]');
         if (a) {
             e.preventDefault(); e.stopPropagation();
@@ -227,14 +223,13 @@ function installDelegates() {
             else if (a.dataset.profile)  window.loadProfile(a.dataset.profile);
             return;
         }
-        // 外部リンクブロック (非a要素)
         const extBlock = e.target.closest('[data-ext]:not(a)');
         if (extBlock?.dataset.ext) {
             e.preventDefault(); e.stopPropagation();
             shell.openExternal(extBlock.dataset.ext);
             return;
         }
-        // ポストアクションボタン
+        
         const actEl = e.target.closest('[data-act]');
         if (!actEl) return;
         const act = actEl.dataset.act;
@@ -249,13 +244,65 @@ function installDelegates() {
         switch (act) {
             case 'profile':   window.loadProfile(actEl.dataset.actor || handle); break;
             case 'reply':     window.prepareReply(uri, cid, handle, rootUri, rootCid); break;
-            case 'repost':    window.doRepost(uri, cid, post?.viewer?.repost || null); break;
             case 'quote':     window.prepareQuote(uri, cid, handle, post?.record?.text || post?.value?.text || ''); break;
-            case 'like':      window.doLike(uri, cid, post?.viewer?.like || null); break;
-            case 'bookmark':  if (post) window.toggleBookmark(post); break;
-            case 'delete':    window.deletePost(uri); break;
-            case 'open-image':window.openModal(actEl.dataset.url || actEl.dataset.fullsize || ''); break;
-            case 'open-quote':{
+            case 'repost': {
+                if (!post) break;
+                const isReposted = !!post.viewer?.repost;
+                const ogUri = post.viewer?.repost;
+                
+                actEl.classList.toggle('reposted', !isReposted);
+                post.repostCount = Math.max(0, (post.repostCount || 0) + (isReposted ? -1 : 1));
+                actEl.innerHTML = `${getIcon('repost')} ${post.repostCount || 0}`;
+                post.viewer = post.viewer || {};
+                post.viewer.repost = isReposted ? null : 'pending';
+                
+                window.doRepost(uri, cid, ogUri || null).then(res => {
+                    if (res && res.action === 'created') post.viewer.repost = res.uri;
+                }).catch(() => { /* エラー時は無視 */ });
+                break;
+            }
+            case 'like': {
+                if (!post) break;
+                const isLiked = !!post.viewer?.like;
+                const ogUri = post.viewer?.like;
+                
+                actEl.classList.toggle('liked', !isLiked);
+                post.likeCount = Math.max(0, (post.likeCount || 0) + (isLiked ? -1 : 1));
+                actEl.innerHTML = `${getIcon('like')} ${post.likeCount || 0}`;
+                post.viewer = post.viewer || {};
+                post.viewer.like = isLiked ? null : 'pending';
+                
+                window.doLike(uri, cid, ogUri || null).then(res => {
+                    if (res && res.action === 'created') post.viewer.like = res.uri;
+                }).catch(() => { /* エラー時は無視 */ });
+                break;
+            }
+            case 'bookmark': {
+                if (!post) break;
+                const isBm = window.aeruneBookmarks.has(post.uri) || !!post.viewer?.bookmark;
+                
+                actEl.classList.toggle('bookmarked', !isBm);
+                if (isBm) window.aeruneBookmarks.delete(post.uri);
+                else window.aeruneBookmarks.add(post.uri);
+                
+                post.viewer = post.viewer || {};
+                post.viewer.bookmark = isBm ? null : 'bookmarked';
+                actEl.innerHTML = getIcon('bookmark');
+                
+                window.toggleBookmark(post);
+                break;
+            }
+            case 'delete': {
+                if (confirm(t('delete_confirm'))) {
+                    postEl.style.display = 'none';
+                    window.deletePost(uri).catch(() => {
+                        postEl.style.display = '';
+                    });
+                }
+                break;
+            }
+            case 'open-image': window.openModal(actEl.dataset.url || actEl.dataset.fullsize || ''); break;
+            case 'open-quote': {
                 const rec = getStoredQuote(actEl.dataset.qid);
                 if (rec) window.openQuoteModal(e, rec);
                 break;
@@ -263,7 +310,6 @@ function installDelegates() {
         }
     }, true);
 
-    // dblclick -> スレッド
     document.addEventListener('dblclick', e => {
         if (hasSelection()) return;
         const postEl = e.target.closest('.post');
@@ -278,13 +324,11 @@ function installDelegates() {
         if (postEl.dataset.uri) window.loadThread(postEl.dataset.uri);
     }, true);
 
-    // contextmenu
     document.addEventListener('contextmenu', e => {
         const postEl = e.target.closest('.post');
         if (!postEl || hasSelection()) return;
         e.preventDefault(); e.stopPropagation();
 
-        // 画像保存
         if (e.target.tagName === 'IMG') {
             window.showContextMenu(e.clientX, e.clientY, [
                 { label: t('save_image'), action: () => downloadImage(e.target.dataset.fullsize || e.target.src) }
@@ -294,7 +338,6 @@ function installDelegates() {
 
         const { uri, did, actor, reason, thread, following, muted, blocking } = postEl.dataset;
 
-        // 通知メニュー
         if (postEl.dataset.notif === '1') {
             const isMe = api.session && did === api.session.did;
             const opts = [];
@@ -343,13 +386,12 @@ function installDelegates() {
 }
 
 // ─── ビュー切り替え ───────────────────────────────────────────────
-// 表示中のビューをキャッシュしてunecessary classList操作を削減
 let _activeView = null;
 const ALL_VIEWS = () => [els.timelineDiv, els.notifDiv, els.chatView, els.searchView, els.profileView, els.threadView, els.settingsView, els.bookmarksView];
 
 function switchView(viewId, activeDiv) {
     if (!els.viewTitle) return;
-    if (_activeView === activeDiv) return; // 同じビューなら何もしない
+    if (_activeView === activeDiv) return; 
 
     els.viewTitle.setAttribute('data-i18n', 'nav_' + viewId);
     els.viewTitle.textContent = t('nav_' + viewId);
@@ -435,7 +477,6 @@ async function sendPost() {
         let imagesEmbed, finalEmbed;
 
         if (selectedImages.length) {
-            // サーバー負荷と容量エラーを防ぐため1枚ずつ直列アップロード
             const blobs = [];
             for (const obj of selectedImages) {
                 const res = await api.uploadBlob(new Uint8Array(await obj.blob.arrayBuffer()));
@@ -735,7 +776,6 @@ async function initApp() {
         quoteModalBody:        get('quote-modal-body'),
     });
 
-    // ブックマークビュー動的作成
     els.bookmarksView = get('bookmarks-view') || (() => {
         const v = document.createElement('div');
         v.id = 'bookmarks-view'; v.className = 'content hidden';
@@ -746,7 +786,6 @@ async function initApp() {
     initModules();
     installDelegates();
 
-    // リフレッシュボタン
     if (els.refreshBtn) {
         els.refreshBtn.innerHTML = getIcon('refresh');
         els.refreshBtn.addEventListener('click', () => {
@@ -758,7 +797,6 @@ async function initApp() {
         });
     }
 
-    // image.svg ボタンSVG化
     document.querySelectorAll('img[src*="image.svg"]').forEach(img => {
         const span = document.createElement('span');
         span.className = img.className || 'icon-btn';
@@ -768,7 +806,6 @@ async function initApp() {
         span.addEventListener('click', () => get('image-input')?.click());
     });
 
-    // 戻るボタン
     if (els.viewTitle && !get('back-btn')) {
         const b = document.createElement('button');
         b.id = 'back-btn'; b.className = 'icon-btn'; b.textContent = '◀';
@@ -777,7 +814,6 @@ async function initApp() {
         els.viewTitle.parentNode.insertBefore(b, els.viewTitle);
     }
 
-    // ブックマークナビ
     if (!get('nav-bookmarks')) {
         const li = document.createElement('li');
         li.id = 'nav-bookmarks'; li.setAttribute('data-i18n', 'nav_bookmarks');
@@ -787,7 +823,6 @@ async function initApp() {
         get('nav-profile')?.parentNode.insertBefore(li, get('nav-profile').nextSibling);
     }
 
-    // 設定画面ブックマークトグル
     if (els.settingsView && !get('setting-bookmark-tab')) {
         const h3 = els.settingsView.querySelector('h3');
         if (h3) {
@@ -799,7 +834,6 @@ async function initApp() {
         }
     }
 
-    // 設定画面 時刻フォーマット切り替えUI（動的挿入）
     if (els.settingsView && !get('setting-time-format-wrap')) {
         const wrap = document.createElement('div');
         wrap.id = 'setting-time-format-wrap';
@@ -816,7 +850,6 @@ async function initApp() {
             `<span data-i18n="settings_time_absolute">${t('settings_time_absolute')}</span>` +
             `</label>` +
             `</div>`;
-        // ブックマークトグルの後 or settingsView末尾に追加
         const bmWrap = get('setting-bookmark-tab')?.closest('div');
         if (bmWrap) {
             if (bmWrap.nextElementSibling) {
@@ -827,9 +860,8 @@ async function initApp() {
         } else {
             els.settingsView.appendChild(wrap);
         }
-        }
+    }
 
-    // 設定初期値
     const sl = get('setting-lang'),  sli = get('setting-limit'),  sn = get('setting-nsfw');
     if (sl)  sl.value   = currentLang;
     if (sli) sli.value  = postLimit;
@@ -837,7 +869,6 @@ async function initApp() {
 
     applyTranslations();
 
-    // ミュート/ブロックリンク
     document.querySelectorAll('[data-i18n="settings_mutes"]').forEach(el => {
         el.style.cursor = 'pointer'; el.style.color = 'var(--bsky-blue)';
         el.onclick = () => window.showMutes();
@@ -847,14 +878,12 @@ async function initApp() {
         el.onclick = () => window.showBlocks();
     });
 
-    // 投稿ドラフト復元
     if (els.postInput) {
         els.postInput.style.minHeight = '80px';
         els.postInput.value = localStorage.getItem('aerune_draft_text') || '';
         els.postInput.addEventListener('input', () => localStorage.setItem('aerune_draft_text', els.postInput.value));
     }
 
-    // D&D
     if (els.dropZone) {
         els.dropZone.addEventListener('dragover',  e => { e.preventDefault(); e.stopPropagation(); els.dropZone.classList.add('drag-over'); });
         els.dropZone.addEventListener('dragleave', e => { e.preventDefault(); e.stopPropagation(); els.dropZone.classList.remove('drag-over'); });

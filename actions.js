@@ -18,32 +18,43 @@ class AppActions {
     }
 
     // ─── Like ────────────────────────────────────────────────────
-    async doLike(uri, cid, likeUri) {
+async doLike(uri, cid, likeUri) {
         try {
-            if (likeUri && likeUri !== 'null') await this.api.deleteLike(likeUri);
-            else await this.api.like(uri, cid);
-            this.refresh.current();
-        } catch (e) { console.error('doLike:', e); }
+            if (likeUri && likeUri !== 'null') {
+                await this.api.deleteLike(likeUri);
+                return { action: 'deleted' };
+            } else {
+                const res = await this.api.like(uri, cid);
+                return { action: 'created', uri: res.uri };
+            }
+        } catch (e) { console.error('doLike:', e); throw e; }
     }
 
     // ─── Repost ──────────────────────────────────────────────────
     async doRepost(uri, cid, repostUri) {
         try {
-            if (repostUri && repostUri !== 'null') await this.api.deleteRepost(repostUri);
-            else await this.api.repost(uri, cid);
-            this.refresh.current();
-        } catch (e) { console.error('doRepost:', e); }
+            if (repostUri && repostUri !== 'null') {
+                await this.api.deleteRepost(repostUri);
+                return { action: 'deleted' };
+            } else {
+                const res = await this.api.repost(uri, cid);
+                return { action: 'created', uri: res.uri };
+            }
+        } catch (e) { console.error('doRepost:', e); throw e; }
     }
 
     // ─── Delete ──────────────────────────────────────────────────
     async deletePost(uri) {
-        if (!confirm(this.t('delete_confirm'))) return;
         try {
             await this.api.deletePost(uri);
+            // 削除成功後にタイムラインを最新状態に更新
             this.refresh.current();
-        } catch (e) { alert(this.t('delete_failed')); }
+        } catch (e) { 
+            alert(this.t('delete_failed')); 
+            throw e; // エラーを画面側に伝える
+        }
     }
-
+    
     // ─── Bookmark ─────────────────────────────────────────────────
     async toggleBookmark(post) {
         try {
@@ -52,43 +63,25 @@ class AppActions {
             if (isBookmarked) {
                 const res = await fetch(`${this.api.pdsUrl}/xrpc/app.bsky.bookmark.deleteBookmark`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${this.api.session.accessJwt}`
-                    },
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${this.api.session.accessJwt}` },
                     body: JSON.stringify({ uri: post.uri })
                 });
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                window.aeruneBookmarks.delete(post.uri);
-                if (post.viewer) delete post.viewer.bookmark;
-                alert(this.t('action_success'));
-                // ブックマーク画面なら再描画
-                if (this.nav && this.nav.current?.type === 'bookmarks') {
-                    this.refresh.bookmarks();
-                } else {
-                    this.refresh.current();
-                }
             } else {
                 const res = await fetch(`${this.api.pdsUrl}/xrpc/app.bsky.bookmark.createBookmark`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${this.api.session.accessJwt}`
-                    },
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${this.api.session.accessJwt}` },
                     body: JSON.stringify({ uri: post.uri, cid: post.cid })
                 });
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                window.aeruneBookmarks.add(post.uri);
-                if (!post.viewer) post.viewer = {};
-                post.viewer.bookmark = 'bookmarked';
-                alert(this.t('action_success'));
             }
         } catch (e) {
             console.error('toggleBookmark:', e);
-            alert(`${this.t('bookmark_failed')}\nReason: ${e.message || String(e)}`);
+            // 失敗時のみこっそりエラーを出す
+            alert(`ブックマークの操作に失敗しました。\n${e.message || String(e)}`);
         }
     }
-
+    
     // ─── Follow / Unfollow ───────────────────────────────────────
     async toggleFollow(did, followingUri) {
         try {
