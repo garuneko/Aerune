@@ -477,6 +477,7 @@ async function sendPost() {
         let imagesEmbed, finalEmbed;
 
         if (selectedImages.length) {
+            // サーバー負荷と容量エラーを防ぐため1枚ずつ直列アップロード
             const blobs = [];
             for (const obj of selectedImages) {
                 const res = await api.uploadBlob(new Uint8Array(await obj.blob.arrayBuffer()));
@@ -494,13 +495,38 @@ async function sendPost() {
             finalEmbed = imagesEmbed;
         }
 
+        // ★追加：スレッド表示中で明示的なリプライ先がない場合、自動的に開いているスレッドへ繋げる
+        let actualReplyTarget = replyTarget;
+        if (!actualReplyTarget && !els.threadView.classList.contains('hidden') && nav.current?.type === 'thread') {
+            const threadPost = getStoredPost(nav.current.uri);
+            if (threadPost) {
+                const rootUri = threadPost.record?.reply?.root?.uri || threadPost.uri;
+                const rootCid = threadPost.record?.reply?.root?.cid || threadPost.cid;
+                actualReplyTarget = {
+                    uri: threadPost.uri,
+                    cid: threadPost.cid,
+                    root: { uri: rootUri, cid: rootCid }
+                };
+            }
+        }
+
         const postData = { text: rt.text, facets: rt.facets, embed: finalEmbed, createdAt: new Date().toISOString() };
-        if (replyTarget) postData.reply = { root: replyTarget.root, parent: { uri: replyTarget.uri, cid: replyTarget.cid } };
+        if (actualReplyTarget) postData.reply = { root: actualReplyTarget.root, parent: { uri: actualReplyTarget.uri, cid: actualReplyTarget.cid } };
 
         await api.post(postData);
         localStorage.removeItem('aerune_draft_text');
         resetPostForm();
-        setTimeout(() => viewLoader.fetchTimeline(postLimit), 500);
+        
+        // ★修正：現在の画面（スレッド、プロフィール、ホーム）に合わせて再読み込み
+        setTimeout(() => {
+            if (!els.threadView.classList.contains('hidden') && nav.current?.type === 'thread') {
+                viewLoader.loadThread(nav.current.uri);
+            } else if (!els.profileView.classList.contains('hidden') && nav.current?.type === 'profile') {
+                viewLoader.loadProfile(nav.current.actor, postLimit);
+            } else {
+                viewLoader.fetchTimeline(postLimit);
+            }
+        }, 500);
     } catch (e) {
         console.error('sendPost:', e);
         alert(t('post_failed'));

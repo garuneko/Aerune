@@ -36,16 +36,18 @@ async fetchTimeline(limit) {
             for (const item of res.data.feed) {
                 if (seenUris.has(item.post.uri)) continue;
 
-                // 2. フォロー外が絡むリプライを厳格に除外
-                // 自分がポストしたもの以外で、親(parent)か大元(root)のどちらかがフォロー外ならスキップ
+                // 2. 自分が関わっていない「フォロー外絡みのリプライ」を除外
                 let shouldSkip = false;
                 if (item.reply && !item.reason) {
                     const isMyPost = item.post.author.did === myDid;
-                    if (!isMyPost) {
-                        const pAuthor = item.reply.parent?.author;
-                        const rAuthor = item.reply.root?.author;
-                        
-                        // 親とルートが「自分」または「フォロー中」であるか判定
+                    const pAuthor = item.reply.parent?.author;
+                    const rAuthor = item.reply.root?.author;
+                    
+                    // ★追加：親ポスト（リプライ先）が「自分」かどうか
+                    const isParentMe = pAuthor && pAuthor.did === myDid;
+
+                    if (!isMyPost && !isParentMe) {
+                        // 自分でもなく、自分宛てのリプライでもない場合のみ、親とルートのフォロー状態を厳格にチェック
                         const isParentValid = pAuthor && (pAuthor.did === myDid || !!pAuthor.viewer?.following);
                         const isRootValid = rAuthor && (rAuthor.did === myDid || !!rAuthor.viewer?.following);
                         
@@ -60,10 +62,10 @@ async fetchTimeline(limit) {
                     continue;
                 }
 
-                // 3. スレッドを上に遡って、親ポストのチェーンを構築
+                // 3. スレッドを上に遡ってコンテキストを構築
+                // （shouldSkipを抜けた＝表示すべきポストなので、親がフォロー外でも文脈として遡る）
                 const threadChain = [];
                 let currentItem = item;
-                let hasInvalidAncestor = false;
 
                 while (currentItem.reply && !currentItem.reason) {
                     const parentUri = currentItem.reply.parent?.uri;
@@ -74,20 +76,8 @@ async fetchTimeline(limit) {
 
                     if (seenUris.has(parentUri)) break;
 
-                    // 遡る過程でフォロー外を見つけたら、そのスレッド全体を破棄
-                    const pAuthor = parentItem.post.author;
-                    if (pAuthor.did !== myDid && !pAuthor.viewer?.following) {
-                        hasInvalidAncestor = true;
-                        break;
-                    }
-
                     threadChain.unshift(parentItem); 
                     currentItem = parentItem;
-                }
-
-                if (hasInvalidAncestor) {
-                    seenUris.add(item.post.uri);
-                    continue;
                 }
 
                 // 4. 構築した親チェーンを追加
@@ -108,7 +98,7 @@ async fetchTimeline(limit) {
             renderPosts(newFeed, this.els.timelineDiv, this.getCtx());
         } catch (e) { console.error('fetchTimeline:', e); }
     }
-    
+        
     async fetchNotifications(limit) {
         try {
             const [notifRes] = await Promise.all([this.api.listNotifications(limit)]);
