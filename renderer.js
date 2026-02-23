@@ -18,6 +18,7 @@ const els = {};
 let savedAccounts = [], currentDid = null;
 let selectedImages = [], replyTarget = null, quoteTarget = null;
 let currentConvoId = null;
+let notifTimer = null;
 window.aeruneBookmarks = new Set();
 
 // ─── 設定 ─────────────────────────────────────────────────────────
@@ -42,13 +43,6 @@ const getRenderContext = () => ({
     aeruneBookmarks: window.aeruneBookmarks,
     timeFormat: window.aeruneTimeFormat || 'relative',
 });
-
-// ─── スタイル (一度だけ注入) ──────────────────────────────────────
-{
-    const s = document.createElement('style');
-    s.textContent = `.svg-icon{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;min-width:18px;flex-shrink:0;vertical-align:middle;margin-right:4px;opacity:.6;transition:all .2s}.svg-icon svg{width:100%;height:100%;display:block}.action-btn{display:inline-flex;align-items:center;background:transparent;border:none;cursor:pointer;padding:4px 8px;color:gray;font-size:.9em}.action-btn:hover .svg-icon{opacity:1;transform:scale(1.1)}.action-btn.liked{color:#e0245e!important}.action-btn.liked .svg-icon{opacity:1;color:#e0245e}.action-btn.liked .svg-icon svg path{fill:#e0245e!important;stroke:#e0245e!important}.action-btn.reposted{color:#17bf63!important}.action-btn.reposted .svg-icon{opacity:1;color:#17bf63}.action-btn.reposted .svg-icon svg path{stroke:#17bf63!important}.action-btn.bookmarked{color:var(--bsky-blue)!important}.action-btn.bookmarked .svg-icon{opacity:1;color:var(--bsky-blue)}.action-btn.bookmarked .svg-icon svg path{fill:var(--bsky-blue)!important;stroke:var(--bsky-blue)!important}.ctx-menu-item .svg-icon{width:16px;height:16px;min-width:16px;flex-shrink:0;margin-right:8px;margin-bottom:2px;opacity:1}.thread-line{position:relative}.thread-line::before{content:'';position:absolute;left:38px;top:62px;bottom:-12px;width:2px;background:#e5e7eb;z-index:1}`;
-    document.head.appendChild(s);
-}
 
 // ─── ナビゲーション ───────────────────────────────────────────────
 function updateBackBtn() {
@@ -120,15 +114,9 @@ function initModules() {
     }, ipcRenderer, nav);
 }
 
-// ─── グローバル公開 ───────────────────────────────────────────────
-window.doLike          = (u, c, l)     => actions.doLike(u, c, l);
-window.doRepost        = (u, c, r)     => actions.doRepost(u, c, r);
-window.deletePost      = u             => actions.deletePost(u);
-window.toggleBookmark  = post          => actions.toggleBookmark(post);
+// ─── グローバル公開 (必要最小限) ──────────────────────────────────
+// ※ view-loader.js 側でまだ onclick を使っている一部の関数のみ残しています
 window.toggleFollow    = (d, f)        => actions.toggleFollow(d, f);
-window.toggleMute      = (d, m)        => actions.toggleMute(d, m);
-window.toggleBlock     = (d, b)        => actions.toggleBlock(d, b);
-window.togglePin       = post          => actions.togglePin(post);
 
 window.loadProfile = (actor, isBack = false) => {
     if (!isBack) { nav.push({ type: 'profile', actor }, _activeView); updateBackBtn(); }
@@ -188,7 +176,6 @@ window.execSearch = async (q) => {
     } catch (e) { console.error('execSearch:', e); }
 };
 
-// ─── コンテキストメニュー ─────────────────────────────────────────
 window.showContextMenu = (x, y, items) => {
     if (!els.ctxMenu) return;
     const frag = document.createDocumentFragment();
@@ -234,6 +221,64 @@ function installDelegates() {
         if (!actEl) return;
         const act = actEl.dataset.act;
         if (!act || act === 'noop') return;
+        
+        // ▼ ポスト外（画像プレビューやモーダル等）の処理 ▼
+        switch (act) {
+            case 'remove-img': {
+                e.preventDefault(); e.stopPropagation();
+                const idx = parseInt(actEl.dataset.idx, 10);
+                selectedImages.splice(idx, 1);
+                updateImagePreview();
+                return;
+            }
+            case 'move-img': {
+                e.preventDefault(); e.stopPropagation();
+                const idx = parseInt(actEl.dataset.idx, 10);
+                const dir = parseInt(actEl.dataset.dir, 10);
+                const tmp = selectedImages[idx];
+                selectedImages[idx] = selectedImages[idx + dir];
+                selectedImages[idx + dir] = tmp;
+                updateImagePreview();
+                return;
+            }
+            case 'prevent-click':
+                e.stopPropagation();
+                return;
+            case 'unmod': {
+                e.preventDefault(); e.stopPropagation();
+                const modType = actEl.dataset.type;
+                const targetDid = actEl.dataset.did;
+                actEl.disabled = true; actEl.textContent = '処理中';
+                if (modType === 'Mute') {
+                    api.unmute(targetDid)
+                        .then(() => { actEl.textContent = '解除済'; actEl.style.cssText = 'color:gray;border:1px solid gray;border-radius:15px;padding:4px 12px;'; })
+                        .catch(err => { alert('Failed: ' + err.message); actEl.disabled = false; actEl.textContent = '解除'; });
+                } else {
+                    api.getProfile(targetDid).then(p => {
+                        if (p.data.viewer?.blocking) {
+                            const rkey = p.data.viewer.blocking.split('/').pop();
+                            return api.agent.com.atproto.repo.deleteRecord({ repo: api.session.did, collection: 'app.bsky.graph.block', rkey });
+                        } else throw new Error('ブロック情報が見つかりません');
+                    }).then(() => {
+                        actEl.textContent = '解除済'; actEl.style.cssText = 'color:gray;border:1px solid gray;border-radius:15px;padding:4px 12px;';
+                    }).catch(err => { alert('Failed: ' + err.message); actEl.disabled = false; actEl.textContent = '解除'; });
+                }
+                return;
+            }
+            case 'profile': {
+                // モーダル等から呼ばれた場合のフォールバック
+                if (!actEl.closest('.post') && actEl.dataset.actor) {
+                    e.preventDefault(); e.stopPropagation();
+                    window.loadProfile(actEl.dataset.actor);
+                    const modal = document.getElementById('list-modal');
+                    if (modal) modal.style.display = 'none';
+                    return;
+                }
+                break;
+            }
+        }
+
+        // ▼ ポスト内（タイムライン等）の処理 ▼
         const postEl = actEl.closest('.post');
         if (!postEl) return;
         e.preventDefault(); e.stopPropagation();
@@ -256,7 +301,7 @@ function installDelegates() {
                 post.viewer = post.viewer || {};
                 post.viewer.repost = isReposted ? null : 'pending';
                 
-                window.doRepost(uri, cid, ogUri || null).then(res => {
+                actions.doRepost(uri, cid, ogUri || null).then(res => {
                     if (res && res.action === 'created') post.viewer.repost = res.uri;
                 }).catch(() => { /* エラー時は無視 */ });
                 break;
@@ -272,7 +317,7 @@ function installDelegates() {
                 post.viewer = post.viewer || {};
                 post.viewer.like = isLiked ? null : 'pending';
                 
-                window.doLike(uri, cid, ogUri || null).then(res => {
+                actions.doLike(uri, cid, ogUri || null).then(res => {
                     if (res && res.action === 'created') post.viewer.like = res.uri;
                 }).catch(() => { /* エラー時は無視 */ });
                 break;
@@ -289,13 +334,13 @@ function installDelegates() {
                 post.viewer.bookmark = isBm ? null : 'bookmarked';
                 actEl.innerHTML = getIcon('bookmark');
                 
-                window.toggleBookmark(post);
+                actions.toggleBookmark(post);
                 break;
             }
             case 'delete': {
                 if (confirm(t('delete_confirm'))) {
                     postEl.style.display = 'none';
-                    window.deletePost(uri).catch(() => {
+                    actions.deletePost(uri).catch(() => {
                         postEl.style.display = '';
                     });
                 }
@@ -345,9 +390,9 @@ function installDelegates() {
             opts.push({ label: t('ctx_profile'), action: () => window.loadProfile(actor) });
             if (!isMe) {
                 opts.push({ divider: true });
-                opts.push({ label: following ? t('ctx_unfollow') : t('ctx_follow'), action: () => window.toggleFollow(did, following) });
-                opts.push({ label: muted     ? t('ctx_unmute')   : t('ctx_mute'),   action: () => window.toggleMute(did, muted) });
-                opts.push({ label: blocking  ? t('ctx_unblock')  : t('ctx_block'),  action: () => window.toggleBlock(did, blocking), color: '#d93025' });
+                opts.push({ label: following ? t('ctx_unfollow') : t('ctx_follow'), action: () => actions.toggleFollow(did, following) });
+                opts.push({ label: muted     ? t('ctx_unmute')   : t('ctx_mute'),   action: () => actions.toggleMute(did, muted) });
+                opts.push({ label: blocking  ? t('ctx_unblock')  : t('ctx_block'),  action: () => actions.toggleBlock(did, blocking), color: '#d93025' });
             }
             if (opts.length) window.showContextMenu(e.clientX, e.clientY, opts);
             return;
@@ -365,21 +410,21 @@ function installDelegates() {
 
         const opts = [
             { label: t('ctx_reply'),    action: () => window.prepareReply(post.uri, post.cid, au.handle, root.uri, root.cid) },
-            { label: t('ctx_repost'),   action: () => window.doRepost(post.uri, post.cid, pv.repost || null) },
+            { label: t('ctx_repost'),   action: () => actions.doRepost(post.uri, post.cid, pv.repost || null) },
             { label: t('ctx_quote'),    action: () => window.prepareQuote(post.uri, post.cid, au.handle, post.record?.text || '') },
             { divider: true },
-            { label: isBm ? t('ctx_unbookmark') : t('ctx_bookmark'), action: () => window.toggleBookmark(post) },
+            { label: isBm ? t('ctx_unbookmark') : t('ctx_bookmark'), action: () => actions.toggleBookmark(post) },
             { divider: true },
             { label: t('ctx_profile'),  action: () => window.loadProfile(au.handle) },
         ];
         if (isMe2) {
             opts.push({ divider: true });
-            opts.push({ label: `${t('ctx_pin')} / ${t('ctx_unpin')}`, action: () => window.togglePin(post) });
+            opts.push({ label: `${t('ctx_pin')} / ${t('ctx_unpin')}`, action: () => actions.togglePin(post) });
         } else {
             opts.push({ divider: true });
-            opts.push({ label: av.following ? t('ctx_unfollow') : t('ctx_follow'), action: () => window.toggleFollow(au.did, av.following) });
-            opts.push({ label: av.muted     ? t('ctx_unmute')   : t('ctx_mute'),   action: () => window.toggleMute(au.did, av.muted) });
-            opts.push({ label: av.blocking  ? t('ctx_unblock')  : t('ctx_block'),  action: () => window.toggleBlock(au.did, av.blocking), color: '#d93025' });
+            opts.push({ label: av.following ? t('ctx_unfollow') : t('ctx_follow'), action: () => actions.toggleFollow(au.did, av.following) });
+            opts.push({ label: av.muted     ? t('ctx_unmute')   : t('ctx_mute'),   action: () => actions.toggleMute(au.did, av.muted) });
+            opts.push({ label: av.blocking  ? t('ctx_unblock')  : t('ctx_block'),  action: () => actions.toggleBlock(au.did, av.blocking), color: '#d93025' });
         }
         window.showContextMenu(e.clientX, e.clientY, opts);
     }, true);
@@ -432,22 +477,18 @@ function updateImagePreview() {
         const wrap = document.createElement('div');
         wrap.className = 'img-preview-wrap';
         wrap.innerHTML =
-            `<img src="${obj.url}" title="クリックで削除" style="cursor:pointer;" onclick="window.removeImg(${i});event.stopPropagation();">` +
+            `<img src="${obj.url}" title="クリックで削除" style="cursor:pointer;" data-act="remove-img" data-idx="${i}">` +
             `<div class="img-controls">` +
-            `<button onclick="window.moveImg(${i},-1);event.stopPropagation();" ${i===0?'disabled':''}>◀</button>` +
-            `<input type="text" placeholder="ALT" value="${obj.alt}" oninput="window.updateAlt(${i},this.value)" onclick="event.stopPropagation();">` +
-            `<button onclick="window.moveImg(${i},1);event.stopPropagation();" ${i===selectedImages.length-1?'disabled':''}>▶</button>` +
-            `<button onclick="window.removeImg(${i});event.stopPropagation();" style="color:#ff6b6b;font-weight:bold;">✖</button>` +
+            `<button data-act="move-img" data-idx="${i}" data-dir="-1" ${i===0?'disabled':''}>◀</button>` +
+            `<input type="text" placeholder="ALT" value="${obj.alt}" data-act="prevent-click" oninput="selectedImages[${i}].alt=this.value">` +
+            `<button data-act="move-img" data-idx="${i}" data-dir="1" ${i===selectedImages.length-1?'disabled':''}>▶</button>` +
+            `<button data-act="remove-img" data-idx="${i}" style="color:#ff6b6b;font-weight:bold;">✖</button>` +
             `</div>`;
         frag.appendChild(wrap);
     });
     els.imagePreviewContainer.textContent = '';
     els.imagePreviewContainer.appendChild(frag);
 }
-
-window.moveImg   = (i, d) => { const tmp = selectedImages[i]; selectedImages[i] = selectedImages[i+d]; selectedImages[i+d] = tmp; updateImagePreview(); };
-window.updateAlt = (i, v) => { selectedImages[i].alt = v; };
-window.removeImg = i => { selectedImages.splice(i, 1); updateImagePreview(); };
 
 async function processIncomingImages(files) {
     if (!files?.length) return;
@@ -477,7 +518,6 @@ async function sendPost() {
         let imagesEmbed, finalEmbed;
 
         if (selectedImages.length) {
-            // サーバー負荷と容量エラーを防ぐため1枚ずつ直列アップロード
             const blobs = [];
             for (const obj of selectedImages) {
                 const res = await api.uploadBlob(new Uint8Array(await obj.blob.arrayBuffer()));
@@ -495,7 +535,6 @@ async function sendPost() {
             finalEmbed = imagesEmbed;
         }
 
-        // ★追加：スレッド表示中で明示的なリプライ先がない場合、自動的に開いているスレッドへ繋げる
         let actualReplyTarget = replyTarget;
         if (!actualReplyTarget && !els.threadView.classList.contains('hidden') && nav.current?.type === 'thread') {
             const threadPost = getStoredPost(nav.current.uri);
@@ -517,7 +556,6 @@ async function sendPost() {
         localStorage.removeItem('aerune_draft_text');
         resetPostForm();
         
-        // ★修正：現在の画面（スレッド、プロフィール、ホーム）に合わせて再読み込み
         setTimeout(() => {
             if (!els.threadView.classList.contains('hidden') && nav.current?.type === 'thread') {
                 viewLoader.loadThread(nav.current.uri);
@@ -541,7 +579,6 @@ async function login() {
     const pw  = document.getElementById('pw').value.trim();
     const btn = document.getElementById('login-btn');
     
-    // 未入力チェック
     if (!id || !pw) return alert(t('login_empty'));
 
     try {
@@ -557,21 +594,14 @@ async function login() {
         const errStr = String(e.message || e).toLowerCase();
         
         if (errStr.includes('app password')) {
-            // サードパーティ用アプリパスワードが必要な場合
-            if (confirm(t('login_app_pw_req'))) {
-                shell.openExternal('https://bsky.app/settings/app-passwords');
-            }
+            if (confirm(t('login_app_pw_req'))) shell.openExternal('https://bsky.app/settings/app-passwords');
         } else if (errStr.includes('invalid identifier or password') || errStr.includes('unauthorized') || errStr.includes('authentication required')) {
-            // IDかパスワード間違い
             alert(t('login_invalid'));
         } else if (errStr.includes('rate limit')) {
-            // 連続試行による制限
             alert(t('login_rate_limit'));
         } else if (errStr.includes('fetch') || errStr.includes('network') || errStr.includes('failed to fetch')) {
-            // オフライン・通信エラー
             alert(t('login_network'));
         } else {
-            // その他の未知のエラー
             const msg = `${t('login_failed')}\n\n${t('error_details')}\n${e.message || e}\n\n${t('login_unknown')}`;
             if (confirm(msg)) shell.openExternal('https://bsky.app');
         }
@@ -590,6 +620,8 @@ async function switchAccount(did) {
         els.loginForm.classList.add('hidden');
         if (els.app) els.app.style.opacity = '1';
         setupLoggedInUI();
+        if (notifTimer) clearInterval(notifTimer);
+        notifTimer = setInterval(checkNotifs, 30000);
     } catch { showLoginForm(); }
 }
 
@@ -627,7 +659,6 @@ async function setupLoggedInUI() {
     nav.push({ type: 'home' }); updateBackBtn();
     switchView('home', els.timelineDiv);
     viewLoader.fetchTimeline(postLimit);
-    setInterval(checkNotifs, 30000);
 }
 
 async function syncBookmarksData() {
@@ -682,10 +713,11 @@ window.showListModal = (title, fetcher, type) => {
             const d = document.createElement('div');
             d.style.cssText = 'display:flex;align-items:center;padding:10px 0;border-bottom:1px solid #f0f0f0;';
             d.innerHTML =
-                `<img src="${user.avatar||''}" style="width:40px;height:40px;border-radius:50%;margin-right:12px;background:#eee;cursor:pointer;" onclick="window.loadProfile('${user.handle}');document.getElementById('list-modal').style.display='none';">` +
-                `<div style="flex:1;overflow:hidden;"><div style="font-weight:bold;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;" onclick="window.loadProfile('${user.handle}');document.getElementById('list-modal').style.display='none';">${user.displayName||user.handle}</div>` +
+                `<img src="${user.avatar||''}" class="action-btn" data-act="profile" data-actor="${user.handle}" style="width:40px;height:40px;border-radius:50%;margin-right:12px;background:#eee;cursor:pointer;padding:0;">` +
+                `<div style="flex:1;overflow:hidden;">` +
+                `<div class="action-btn" data-act="profile" data-actor="${user.handle}" style="font-weight:bold;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;padding:0;color:inherit;">${user.displayName||user.handle}</div>` +
                 `<div style="color:gray;font-size:.85em;">@${user.handle}</div></div>` +
-                `<button class="action-btn" style="color:#d93025;border:1px solid #d93025;border-radius:15px;padding:4px 12px;font-weight:bold;opacity:1;" onclick="window.un${type}User('${user.did}',this)">解除</button>`;
+                `<button class="action-btn" data-act="unmod" data-type="${type}" data-did="${user.did}" style="color:#d93025;border:1px solid #d93025;border-radius:15px;padding:4px 12px;font-weight:bold;opacity:1;">解除</button>`;
             frag.appendChild(d);
         }
         body.textContent = '';
@@ -697,26 +729,6 @@ window.showListModal = (title, fetcher, type) => {
 
 window.showMutes  = () => actions.showMutes(t);
 window.showBlocks = () => actions.showBlocks(t);
-
-window.unMuteUser = async (did, btn) => {
-    try {
-        btn.disabled = true; btn.textContent = '処理中';
-        await api.unmute(did);
-        btn.textContent = '解除済'; btn.style.color = 'gray'; btn.style.borderColor = 'gray';
-    } catch (e) { alert('Failed: ' + e.message); btn.disabled = false; btn.textContent = '解除'; }
-};
-
-window.unBlockUser = async (did, btn) => {
-    try {
-        btn.disabled = true; btn.textContent = '処理中';
-        const p = await api.getProfile(did);
-        if (p.data.viewer?.blocking) {
-            const rkey = p.data.viewer.blocking.split('/').pop();
-            await api.agent.com.atproto.repo.deleteRecord({ repo: api.session.did, collection: 'app.bsky.graph.block', rkey });
-            btn.textContent = '解除済'; btn.style.color = 'gray'; btn.style.borderColor = 'gray';
-        } else { alert('ブロック情報が見つかりません'); btn.disabled = false; btn.textContent = '解除'; }
-    } catch (e) { alert('Failed: ' + e.message); btn.disabled = false; btn.textContent = '解除'; }
-};
 
 // ─── チャット ─────────────────────────────────────────────────────
 async function fetchConvos() {
