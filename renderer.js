@@ -839,20 +839,26 @@ async function initApp() {
     startRelativeTimeTicker();
 
     // 一番下までスクロールしたら次を読み込む
-    let scrollTimeout = null;
-    document.querySelector('.content').addEventListener('scroll', e => {
-        if (scrollTimeout) return;
-        scrollTimeout = setTimeout(() => {
-            const t = e.target;
-            // 下から300pxの位置に到達したらAppend発火
-            if (t.scrollHeight - t.scrollTop <= t.clientHeight + 300) {
-                if (!els.timelineDiv.classList.contains('hidden')) viewLoader.fetchTimeline(true);
-                else if (!els.profileView.classList.contains('hidden')) viewLoader.loadProfile(nav.current?.actor, true);
-                else if (!els.searchView.classList.contains('hidden')) window.execSearch(document.getElementById('search-input').value, true); 
-            }
-            scrollTimeout = null;
-        }, 150); // スクロールイベントを間引き（スロットリング）
+    const contentEl = document.querySelector('.content');
+    
+    // 監視用のダミー要素（センチネル）を作成して末尾（投稿フォームの手前）に配置
+    const sentinel = document.createElement('div');
+    sentinel.id = 'scroll-sentinel';
+    sentinel.style.height = '1px';
+    contentEl.insertBefore(sentinel, document.getElementById('drop-zone'));
+
+    const observer = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting) {
+            // ダミー要素が画面（下から300px）に入ったらAppend発火
+            if (!els.timelineDiv.classList.contains('hidden')) viewLoader.fetchTimeline(true);
+            else if (!els.profileView.classList.contains('hidden')) viewLoader.loadProfile(nav.current?.actor, true);
+            else if (!els.searchView.classList.contains('hidden')) window.execSearch(document.getElementById('search-input').value, true); 
+        }
+    }, {
+        root: contentEl,
+        rootMargin: '0px 0px 300px 0px' // 下から300pxの位置で交差判定
     });
+    observer.observe(sentinel);
 
     const get = id => document.getElementById(id);
 

@@ -5,7 +5,19 @@ const { escAttr, renderRichText } = require('./utils.js');
 const postStore = new Map();
 const quoteStore = new Map();
 let quoteSeq = 0;
+const MAX_STORE_SIZE = 1000;
 
+function setStoreWithLimit(store, key, value) {
+    if (store.size >= MAX_STORE_SIZE) {
+        // Mapは挿入順を保持するため、最初のキーが一番古いデータになる
+        store.delete(store.keys().next().value);
+    }
+    store.set(key, value);
+}
+
+function clearStores() { postStore.clear(); quoteStore.clear(); quoteSeq = 0; }
+function getPost(uri) { return postStore.get(uri); }
+function getQuote(qid) { return quoteStore.get(qid); }
 function clearStores() { postStore.clear(); quoteStore.clear(); quoteSeq = 0; }
 function getPost(uri) { return postStore.get(uri); }
 function getQuote(qid) { return quoteStore.get(qid); }
@@ -18,9 +30,6 @@ function isNsfwPost(post) {
         || post.author.labels?.some(l => NSFW_LABELS.has(l.val));
 }
 
-// ─── 日時フォーマット ──────────────────────────────────────────────
-// timeFormat: 'relative' | 'absolute'
-// キャッシュ: 相対時間は1分単位でまとめてキャッシュ（大量ポストでも重複計算なし）
 const _relCache = new Map();
 
 function formatRelative(date) {
@@ -82,7 +91,7 @@ function renderEmbedImages(images, imgClass) {
 
 function renderQuoteBlock(rec, imgClass) {
     const qid = String(++quoteSeq);
-    quoteStore.set(qid, rec);
+    setStoreWithLimit(quoteStore, qid, rec);
     let media = '';
     if (rec.embeds?.[0]?.$type === 'app.bsky.embed.images#view') {
         media = `<div class="post-images" style="margin-top:8px;">${rec.embeds[0].images.map(img => renderImg(img, imgClass)).join('')}</div>`;
@@ -131,7 +140,7 @@ function createPostElement(post, ctx, isThreadRoot = false, isQuoteModal = false
     if (!post?.author) return document.createElement('div');
 
     const { api, t, getIcon, nsfwBlur, aeruneBookmarks, timeFormat = 'relative' } = ctx;
-    if (post.uri) postStore.set(post.uri, post);
+    if (post.uri) setStoreWithLimit(postStore, post.uri, post);
 
     const au = post.author;
     const pv = post.viewer || {};
