@@ -4,14 +4,26 @@ const fs = require('fs');
 
 let sessionPath;
 let mainWindow;
+let boundsPath;
 
 function createWindow() {
   sessionPath = path.join(app.getPath('userData'), 'session.json');
+  boundsPath = path.join(app.getPath('userData'), 'bounds.json');
+
+  // 前回終了時のウィンドウサイズを読み込む
+  let bounds = { width: 1000, height: 800 };
+  try { if (fs.existsSync(boundsPath)) bounds = JSON.parse(fs.readFileSync(boundsPath)); } catch(e) {}
+
   mainWindow = new BrowserWindow({
-    width: 1000, height: 800,
+    ...bounds, // 読み込んだサイズ・座標を適用
     webPreferences: { nodeIntegration: true, contextIsolation: false },
   });
   mainWindow.loadFile('index.html');
+
+  // アプリ終了時にサイズと座標を保存
+  mainWindow.on('close', () => {
+    try { fs.writeFileSync(boundsPath, JSON.stringify(mainWindow.getBounds())); } catch(e) {}
+  });
 }
 
 app.whenReady().then(createWindow);

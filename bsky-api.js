@@ -41,10 +41,19 @@ class BskyAPI {
     // ─── プロフィール ─────────────────────────────────────────────
     async getProfile(actor) { return await this.agent.getProfile({ actor }); }
 
-    // ─── タイムライン / フィード ──────────────────────────────────
-    async getTimeline(limit = 30) { return await this.agent.getTimeline({ limit }); }
-    async getAuthorFeed(actor, limit = 30) { return await this.agent.getAuthorFeed({ actor, limit }); }
-
+// ─── タイムライン / フィード ──────────────────────────────────
+    async getTimeline(limit = 30, cursor = undefined) { 
+        const params = { limit };
+        if (cursor) params.cursor = cursor;
+        return await this.agent.getTimeline(params); 
+    }
+    
+    async getAuthorFeed(actor, limit = 30, cursor = undefined) { 
+        const params = { actor, limit };
+        if (cursor) params.cursor = cursor;
+        return await this.agent.getAuthorFeed(params); 
+    }
+        
     // ─── スレッド ─────────────────────────────────────────────────
     async getPostThread(uri) {
         return await this.agent.getPostThread({ uri, depth: 10, parentHeight: 10 });
@@ -106,10 +115,12 @@ class BskyAPI {
     async getBlocks(limit = 50) { return await this.agent.app.bsky.graph.getBlocks({ limit }); }
 
     // ─── 検索 ─────────────────────────────────────────────────────
-    async searchPosts(query, limit = 30) {
-        return await this.agent.app.bsky.feed.searchPosts({ q: query, limit });
+    async searchPosts(query, limit = 30, cursor = undefined) {
+        const params = { q: query, limit };
+        if (cursor) params.cursor = cursor;
+        return await this.agent.app.bsky.feed.searchPosts(params);
     }
-
+        
     // ─── チャット ─────────────────────────────────────────────────
     getChatAgent() {
         if (!this.chatAgent) this._initChatAgent();

@@ -6,6 +6,10 @@
     --text-sub: #64748b;
 }
 
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
 body {
     margin: 0;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -33,7 +37,7 @@ body {
 .logout-btn:hover { background-color: #fef2f2; }
 
 /* メインコンテンツ */
-.content { flex: 1; overflow-y: auto; position: relative; min-width: 0; display: flex; flex-direction: column; }
+.content { flex: 1; overflow-y: auto; overflow-x: hidden; position: relative; min-width: 0; display: flex; flex-direction: column; }
 .content-header {
     position: sticky; top: 0; background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(10px);
     padding: 15px 20px; border-bottom: 1px solid var(--border-color);

@@ -17,7 +17,7 @@
         .img-controls button { background: none; border: none; color: white; cursor: pointer; font-size: 0.9em; padding: 0 4px; transition: 0.2s; }
         .img-controls button:hover { transform: scale(1.2); }
         .img-controls button:disabled { opacity: 0.3; cursor: not-allowed; }
-        .nsfw-blur { filter: blur(20px); cursor: pointer; }cursor: pointer; }
+        .nsfw-blur { filter: blur(20px); cursor: pointer; }
         .user-list-item { display: flex; align-items: center; justify-content: space-between; padding: 10px; border-bottom: 1px solid #eee; }
         .danger-text { color: #d93025; }
     </style>
@@ -48,7 +48,7 @@
         <main class="content">
             <header class="content-header">
                 <h2 id="view-title" data-i18n="nav_home">Home</h2>
-                <button id="refresh-btn" class="icon-btn" style="background:none; border:none; cursor:pointer;"><img src="reload.svg" alt="reload" style="width: 20px; height: 20px; vertical-align: middle;"></button>
+                <button id="refresh-btn" class="icon-btn" style="background:none; border:none; cursor:pointer;"></button>
             </header>
             <div id="timeline"></div>
             <div id="notifications" class="hidden"></div>
@@ -86,10 +86,6 @@
                             <option value="ja">日本語</option>
                             <option value="en">English</option>
                         </select>
-                    </div>
-                    <div style="margin-bottom: 20px;">
-                        <label data-i18n="settings_limit" style="display:block; margin-bottom:8px; font-weight:bold;">TLや検索の読み込み件数 (10〜100)</label>
-                        <input type="number" id="setting-limit" min="10" max="100" style="padding: 8px; border-radius: 5px; border: 1px solid #ccc; width: 100px;">
                     </div>
                     <div style="margin-bottom: 20px;">
                         <label style="display:flex; align-items:center; font-weight:bold; cursor:pointer;">

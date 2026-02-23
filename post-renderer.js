@@ -169,9 +169,8 @@ function createPostElement(post, ctx, isThreadRoot = false, isQuoteModal = false
     // ISO文字列をそのままtitle属性に入れ、ホバーで絶対時刻を見られるようにする
     const absTitle = rawTs ? escAttr(formatAbsolute(new Date(rawTs))) : '';
     const tsHtml = tsText
-        ? `<span class="post-timestamp" title="${absTitle}" style="color:gray;font-size:.78em;margin-left:auto;white-space:nowrap;flex-shrink:0;padding-left:6px;">${escAttr(tsText)}</span>`
+        ? `<span class="post-timestamp" data-ts="${rawTs}" title="${absTitle}" style="color:gray;font-size:.78em;margin-left:auto;white-space:nowrap;flex-shrink:0;padding-left:6px;">${escAttr(tsText)}</span>`
         : '';
-
     const div = document.createElement('div');
     div.className = 'post';
     div.dataset.uri      = post.uri  || '';
@@ -209,9 +208,9 @@ function createPostElement(post, ctx, isThreadRoot = false, isQuoteModal = false
 }
 
 // ─── 複数ポストの一括レンダリング ───────────────────────────────
-function renderPosts(posts, container, ctx) {
+function renderPosts(posts, container, ctx, isAppend = false) {
     if (!container) return;
-    clearStores();
+    if (!isAppend) clearStores(); // 追記モードでなければクリア
 
     const fragment = document.createDocumentFragment();
     let prevUri = null;
@@ -230,9 +229,10 @@ function renderPosts(posts, container, ctx) {
 
     // rAFでDOM更新を1フレームにまとめる（reflow最小化）
     requestAnimationFrame(() => {
-        container.textContent = ''; // innerHTML=''より高速
+        if (!isAppend) container.textContent = ''; // 追記モード時は初期化しない
         container.appendChild(fragment);
     });
 }
 
-module.exports = { createPostElement, renderPosts, getPost, getQuote, clearStores };
+// 💡 formatRelative などを外部に公開する！
+module.exports = { createPostElement, renderPosts, getPost, getQuote, clearStores, formatRelative, formatAbsolute };

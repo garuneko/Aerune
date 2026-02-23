@@ -7,7 +7,7 @@ const { hasSelection, compressImage, downloadImage, linkify, renderRichText } = 
 const Navigation = require('./navigation.js');
 const BskyAPI = require('./bsky-api.js');
 const { ICON_CACHE, translations } = require('./constants.js');
-const { createPostElement, renderPosts, getPost: getStoredPost, getQuote: getStoredQuote } = require('./post-renderer.js');
+const { createPostElement, renderPosts, getPost: getStoredPost, getQuote: getStoredQuote, formatRelative } = require('./post-renderer.js');
 const AppActions = require('./actions.js');
 const ViewLoader = require('./view-loader.js');
 
@@ -23,7 +23,6 @@ window.aeruneBookmarks = new Set();
 
 // ─── 設定 ─────────────────────────────────────────────────────────
 let currentLang = localStorage.getItem('aerune_lang') || (navigator.language.startsWith('ja') ? 'ja' : 'en');
-let postLimit = Math.max(10, Math.min(100, parseInt(localStorage.getItem('aerune_post_limit')) || 30));
 let nsfwBlur = localStorage.getItem('aerune_nsfw_blur') !== 'false';
 let showBookmarksConfig = localStorage.getItem('aerune_show_bookmarks') !== 'false';
 window.aeruneTimeFormat = localStorage.getItem('aerune_time_format') || 'relative';
@@ -65,11 +64,11 @@ function goBack() {
     switch (prev.type) {
         case 'home':
             switchView('home', els.timelineDiv);
-            viewLoader.fetchTimeline(postLimit).then(() => restoreScroll(els.timelineDiv));
+            viewLoader.fetchTimeline().then(() => restoreScroll(els.timelineDiv));
             break;
         case 'notifications':
             switchView('notifications', els.notifDiv);
-            viewLoader.fetchNotifications(postLimit).then(() => restoreScroll(els.notifDiv));
+            viewLoader.fetchNotifications().then(() => restoreScroll(els.notifDiv));
             break;
         case 'chat':
             switchView('chat', els.chatView);
@@ -90,7 +89,7 @@ function goBack() {
             break;
         case 'bookmarks':
             switchView('bookmarks', els.bookmarksView);
-            viewLoader.fetchBookmarks(postLimit).then(() => restoreScroll(els.bookmarksView));
+            viewLoader.fetchBookmarks().then(() => restoreScroll(els.bookmarksView));
             break;
     }
 }
@@ -101,27 +100,25 @@ let viewLoader, actions;
 function initModules() {
     viewLoader = new ViewLoader(api, getRenderContext, els);
     actions = new AppActions(api, t, {
-        timeline:  () => viewLoader.fetchTimeline(postLimit),
-        bookmarks: () => viewLoader.fetchBookmarks(postLimit),
+        timeline:  () => viewLoader.fetchTimeline(),
+        bookmarks: () => viewLoader.fetchBookmarks(),
         current:   () => {
-            if (!els.timelineDiv.classList.contains('hidden'))         viewLoader.fetchTimeline(postLimit);
+            if (!els.timelineDiv.classList.contains('hidden'))         viewLoader.fetchTimeline();
             else if (els.profileView && !els.profileView.classList.contains('hidden') && nav.current?.type === 'profile')
-                                                                        viewLoader.loadProfile(nav.current.actor, postLimit);
+                                                                        viewLoader.loadProfile(nav.current.actor);
             else if (els.bookmarksView && !els.bookmarksView.classList.contains('hidden'))
-                                                                        viewLoader.fetchBookmarks(postLimit);
+                                                                        viewLoader.fetchBookmarks();
         },
-        profile:   actor => viewLoader.loadProfile(actor, postLimit)
+        profile:   actor => viewLoader.loadProfile(actor)
     }, ipcRenderer, nav);
 }
 
 // ─── グローバル公開 (必要最小限) ──────────────────────────────────
-// ※ view-loader.js 側でまだ onclick を使っている一部の関数のみ残しています
-window.toggleFollow    = (d, f)        => actions.toggleFollow(d, f);
 
 window.loadProfile = (actor, isBack = false) => {
     if (!isBack) { nav.push({ type: 'profile', actor }, _activeView); updateBackBtn(); }
     switchView('profile', els.profileView);
-    viewLoader.loadProfile(actor, postLimit);
+    viewLoader.loadProfile(actor);
 };
 
 window.loadThread = (uri, isBack = false) => {
@@ -171,7 +168,7 @@ window.execSearch = async (q) => {
     nav.push({ type: 'search' }, _activeView); updateBackBtn();
     switchView('search', els.searchView);
     try {
-        const res = await api.searchPosts(query, postLimit);
+        const res = await api.searchPosts(query);
         renderPosts(res.data.posts, document.getElementById('search-results'), getRenderContext());
     } catch (e) { console.error('execSearch:', e); }
 };
@@ -224,6 +221,21 @@ function installDelegates() {
         
         // ▼ ポスト外（画像プレビューやモーダル等）の処理 ▼
         switch (act) {
+            case 'start-dm': {
+                e.preventDefault(); e.stopPropagation();
+                window.startDirectMessage(actEl.dataset.did);
+                return;
+            }
+            case 'profile-reply': {
+                e.preventDefault(); e.stopPropagation();
+                window.prepareProfileReply(actEl.dataset.handle);
+                return;
+            }
+            case 'toggle-follow': {
+                e.preventDefault(); e.stopPropagation();
+                actions.toggleFollow(actEl.dataset.did, actEl.dataset.following);
+                return;
+            }
             case 'remove-img': {
                 e.preventDefault(); e.stopPropagation();
                 const idx = parseInt(actEl.dataset.idx, 10);
@@ -560,9 +572,9 @@ async function sendPost() {
             if (!els.threadView.classList.contains('hidden') && nav.current?.type === 'thread') {
                 viewLoader.loadThread(nav.current.uri);
             } else if (!els.profileView.classList.contains('hidden') && nav.current?.type === 'profile') {
-                viewLoader.loadProfile(nav.current.actor, postLimit);
+                viewLoader.loadProfile(nav.current.actor);
             } else {
-                viewLoader.fetchTimeline(postLimit);
+                viewLoader.fetchTimeline();
             }
         }, 500);
     } catch (e) {
@@ -574,7 +586,7 @@ async function sendPost() {
 }
 
 // ─── ログイン/アカウント ──────────────────────────────────────────
-async function login() {
+async function login() {    
     const id  = document.getElementById('id').value.trim();
     const pw  = document.getElementById('pw').value.trim();
     const btn = document.getElementById('login-btn');
@@ -588,6 +600,11 @@ async function login() {
             savedAccounts = savedAccounts.filter(a => a.did !== res.data.did);
             savedAccounts.push(res.data);
             await ipcRenderer.invoke('save-session', savedAccounts);
+
+            // 💡 ログイン成功したら入力欄を空にする
+            document.getElementById('id').value = '';
+            document.getElementById('pw').value = '';
+
             await switchAccount(res.data.did);
         }
     } catch (e) {
@@ -658,7 +675,7 @@ async function setupLoggedInUI() {
     syncBookmarksData();
     nav.push({ type: 'home' }); updateBackBtn();
     switchView('home', els.timelineDiv);
-    viewLoader.fetchTimeline(postLimit);
+    viewLoader.fetchTimeline();
 }
 
 async function syncBookmarksData() {
@@ -808,7 +825,35 @@ window.startDirectMessage = async (did) => {
 window.downloadImage = downloadImage;
 
 // ─── 初期化 ───────────────────────────────────────────────────────
+function startRelativeTimeTicker() {
+    setInterval(() => {
+        if (window.aeruneTimeFormat === 'absolute') return;
+        document.querySelectorAll('.post-timestamp[data-ts]').forEach(el => {
+            el.textContent = formatRelative(new Date(el.dataset.ts));
+        });
+    }, 60000);
+}
+
 async function initApp() {
+    // 💡 時間更新タイマーを起動
+    startRelativeTimeTicker();
+
+    // 一番下までスクロールしたら次を読み込む
+    let scrollTimeout = null;
+    document.querySelector('.content').addEventListener('scroll', e => {
+        if (scrollTimeout) return;
+        scrollTimeout = setTimeout(() => {
+            const t = e.target;
+            // 下から300pxの位置に到達したらAppend発火
+            if (t.scrollHeight - t.scrollTop <= t.clientHeight + 300) {
+                if (!els.timelineDiv.classList.contains('hidden')) viewLoader.fetchTimeline(true);
+                else if (!els.profileView.classList.contains('hidden')) viewLoader.loadProfile(nav.current?.actor, true);
+                else if (!els.searchView.classList.contains('hidden')) window.execSearch(document.getElementById('search-input').value, true); 
+            }
+            scrollTimeout = null;
+        }, 150); // スクロールイベントを間引き（スロットリング）
+    });
+
     const get = id => document.getElementById(id);
 
     Object.assign(els, {
@@ -850,11 +895,11 @@ async function initApp() {
     if (els.refreshBtn) {
         els.refreshBtn.innerHTML = getIcon('refresh');
         els.refreshBtn.addEventListener('click', () => {
-            if (!els.timelineDiv.classList.contains('hidden'))     viewLoader.fetchTimeline(postLimit);
-            else if (!els.notifDiv.classList.contains('hidden'))   viewLoader.fetchNotifications(postLimit);
+            if (!els.timelineDiv.classList.contains('hidden'))     viewLoader.fetchTimeline();
+            else if (!els.notifDiv.classList.contains('hidden'))   viewLoader.fetchNotifications();
             else if (!els.chatView.classList.contains('hidden'))   fetchConvos();
             else if (els.bookmarksView && !els.bookmarksView.classList.contains('hidden'))
-                                                                    viewLoader.fetchBookmarks(postLimit);
+                                                                    viewLoader.fetchBookmarks();
         });
     }
 
@@ -879,7 +924,7 @@ async function initApp() {
         const li = document.createElement('li');
         li.id = 'nav-bookmarks'; li.setAttribute('data-i18n', 'nav_bookmarks');
         li.textContent = t('nav_bookmarks');
-        li.onclick = () => { nav.push({ type: 'bookmarks' }, _activeView); updateBackBtn(); switchView('bookmarks', els.bookmarksView); viewLoader.fetchBookmarks(postLimit); };
+        li.onclick = () => { nav.push({ type: 'bookmarks' }, _activeView); updateBackBtn(); switchView('bookmarks', els.bookmarksView); viewLoader.fetchBookmarks(); };
         li.style.display = showBookmarksConfig ? 'block' : 'none';
         get('nav-profile')?.parentNode.insertBefore(li, get('nav-profile').nextSibling);
     }
@@ -923,9 +968,8 @@ async function initApp() {
         }
     }
 
-    const sl = get('setting-lang'),  sli = get('setting-limit'),  sn = get('setting-nsfw');
+    const sl = get('setting-lang'), sn = get('setting-nsfw');
     if (sl)  sl.value   = currentLang;
-    if (sli) sli.value  = postLimit;
     if (sn)  sn.checked = nsfwBlur;
 
     applyTranslations();
@@ -946,10 +990,20 @@ async function initApp() {
     }
 
     if (els.dropZone) {
-        els.dropZone.addEventListener('dragover',  e => { e.preventDefault(); e.stopPropagation(); els.dropZone.classList.add('drag-over'); });
-        els.dropZone.addEventListener('dragleave', e => { e.preventDefault(); e.stopPropagation(); els.dropZone.classList.remove('drag-over'); });
-        els.dropZone.addEventListener('drop', async e => {
-            e.preventDefault(); e.stopPropagation(); els.dropZone.classList.remove('drag-over');
+        // ウィンドウ全体でD&Dを監視
+        document.addEventListener('dragover', e => { 
+            e.preventDefault(); e.stopPropagation(); 
+            els.dropZone.style.display = 'flex'; // フォームを表示
+            els.dropZone.classList.add('drag-over'); 
+        });
+        document.addEventListener('dragleave', e => { 
+            e.preventDefault(); e.stopPropagation(); 
+            if (e.clientX === 0 || e.clientY === 0) els.dropZone.classList.remove('drag-over'); 
+        });
+        document.addEventListener('drop', async e => {
+            e.preventDefault(); e.stopPropagation(); 
+            els.dropZone.classList.remove('drag-over');
+            els.postInput.focus(); // すぐに入力できるようフォーカス
             await processIncomingImages(Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/')));
         });
     }
@@ -961,8 +1015,8 @@ async function initApp() {
     get('login-cancel-btn')?.addEventListener('click', () => { els.loginForm.classList.add('hidden'); if (els.app) els.app.style.opacity = '1'; });
     get('post-btn')?.addEventListener('click', sendPost);
 
-    get('nav-home')?.addEventListener('click',          () => { nav.push({type:'home'}, _activeView); updateBackBtn(); switchView('home', els.timelineDiv); viewLoader.fetchTimeline(postLimit); });
-    get('nav-notifications')?.addEventListener('click', () => { nav.push({type:'notifications'}, _activeView); updateBackBtn(); switchView('notifications', els.notifDiv); viewLoader.fetchNotifications(postLimit); });
+    get('nav-home')?.addEventListener('click',          () => { nav.push({type:'home'}, _activeView); updateBackBtn(); switchView('home', els.timelineDiv); viewLoader.fetchTimeline(); });
+    get('nav-notifications')?.addEventListener('click', () => { nav.push({type:'notifications'}, _activeView); updateBackBtn(); switchView('notifications', els.notifDiv); viewLoader.fetchNotifications(); });
     get('nav-chat')?.addEventListener('click',          () => { nav.push({type:'chat'}, _activeView); updateBackBtn(); switchView('chat', els.chatView); fetchConvos(); });
     get('nav-search')?.addEventListener('click',        () => { nav.push({type:'search'}, _activeView); updateBackBtn(); switchView('search', els.searchView); });
     get('nav-profile')?.addEventListener('click',       () => window.loadProfile(api.session.did));
@@ -970,8 +1024,12 @@ async function initApp() {
 
     get('search-exec-btn')?.addEventListener('click', () => window.execSearch());
     get('search-input')?.addEventListener('keydown', e => { if (e.key === 'Enter') window.execSearch(); });
-    get('add-account-btn')?.addEventListener('click', () => { els.loginForm.classList.remove('hidden'); if (els.app) els.app.style.opacity = '0.3'; });
-
+    get('add-account-btn')?.addEventListener('click', () => { 
+        document.getElementById('id').value = '';
+        document.getElementById('pw').value = '';
+        els.loginForm.classList.remove('hidden'); 
+        if (els.app) els.app.style.opacity = '0.3'; 
+    });
     get('logout-btn')?.addEventListener('click', () => {
         actions.logout(currentDid, savedAccounts,
             () => { currentDid = null; const al = get('account-list'); if (al) al.textContent = ''; showLoginForm(); },
@@ -981,20 +1039,18 @@ async function initApp() {
 
     get('settings-save-btn')?.addEventListener('click', () => {
         const nl  = get('setting-lang')?.value || currentLang;
-        const nli = Math.min(100, Math.max(10, parseInt(get('setting-limit')?.value) || 30));
         const nb  = get('setting-nsfw')?.checked ?? nsfwBlur;
         const nbm = get('setting-bookmark-tab')?.checked ?? showBookmarksConfig;
         const ntf = document.querySelector('input[name="aerune_time_format"]:checked')?.value || window.aeruneTimeFormat || 'relative';
 
         localStorage.setItem('aerune_lang',           nl);
-        localStorage.setItem('aerune_post_limit',     nli.toString());
         localStorage.setItem('aerune_nsfw_blur',      nb.toString());
         localStorage.setItem('aerune_show_bookmarks', nbm.toString());
         localStorage.setItem('aerune_time_format',    ntf);
 
-        currentLang = nl; nsfwBlur = nb; showBookmarksConfig = nbm; postLimit = nli;
+        currentLang = nl; nsfwBlur = nb; showBookmarksConfig = nbm;
         window.aeruneTimeFormat = ntf;
-        const sli2 = get('setting-limit'); if (sli2) sli2.value = nli;
+        
         get('nav-bookmarks')?.style.setProperty('display', nbm ? 'block' : 'none');
         applyTranslations();
 
