@@ -82,35 +82,35 @@ const BLUE = 'color:var(--bsky-blue);text-decoration:none;';
 
 function linkify(text) {
     if (!text) return '';
-    const cached = LC.get(text);
-    if (cached) return cached;
+    
+    // 1. XSS対策（エスケープ処理）
+    let html = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-    let s = escHTML(text);
+    // 2. URL、メールアドレス、メンションをまとめて判定する正規表現
+    // グループ1: URL (http/https)
+    // グループ2: メールアドレス (xxx@yyy.zzz)
+    // グループ3: メンションの手前の空白や行頭
+    // グループ4: メンション本体 (@handle)
+    // グループ5: ハンドル名のみ (handle)
+    const regex = /(https?:\/\/[^\s]+)|([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})|(^|\s)(@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,}))/g;
 
-    s = s.replace(URL_RE, m => {
-        if (m.includes('@') && !m.startsWith('http')) return m;
-        if (!m.includes('.') || m.length < 5) return m;
-        let url = m.startsWith('http') ? m : 'https://' + m;
-        let punc = '';
-        if (/[.,;!?)]/.test(url.at(-1))) { punc = url.at(-1); url = url.slice(0, -1); m = m.slice(0, -1); }
-        return `<a href="${escAttr(url)}" data-ext="${escAttr(url)}" style="${BLUE}">${m}</a>${punc}`;
+    html = html.replace(regex, (match, url, email, space, mention, handle) => {
+        if (url) {
+            // 🌐 URLリンク -> ブラウザで開く
+            return `<a href="#" data-ext="${url}">${url}</a>`;
+        } else if (email) {
+            // ✉️ メールアドレス -> メーラーを起動 (mailto:)
+            return `<a href="#" data-ext="mailto:${email}">${email}</a>`;
+        } else if (mention) {
+            // 👤 アカウントメンション -> アプリ内のプロフィール画面へ遷移
+            return `${space}<a href="#" data-profile="${handle}">${mention}</a>`;
+        }
+        return match;
     });
 
-    s = s.replace(TAG_RE, (_, tag) => {
-        const sp = _.startsWith(' ') ? ' ' : '';
-        return `${sp}<a href="#" data-search="${escAttr(tag.trim())}" style="${BLUE}">${tag}</a>`;
-    });
-
-    s = s.replace(MEN_RE, (_, h) => {
-        const sp = _.startsWith(' ') ? ' ' : '';
-        return `${sp}<a href="#" data-profile="${escAttr(h.trim().slice(1))}" style="${BLUE}">${h.trim()}</a>`;
-    });
-
-    if (LC.size >= 500) { LC.delete(LC.keys().next().value); }
-    LC.set(text, s);
-    return s;
+    // 3. 改行を <br> に変換
+    return html.replace(/\n/g, '<br>');
 }
-
 // ---- rich text (LRU cache) ----
 const RC = new Map();
 function renderRichText(record) {
