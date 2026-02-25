@@ -18,6 +18,7 @@ exports.default = async function notarizing(context) {
       appleApiKey: process.env.APPLE_API_KEY,      // p8ファイルのパス
       appleApiKeyId: process.env.APPLE_API_KEY_ID,  // 10桁のキーID
       appleApiIssuer: process.env.APPLE_API_ISSUER, // UUID形式のIssuer ID
+      teamId: '9QAS82P23Q'
     });
   } catch (error) {
     console.error('Notarization failed:');
