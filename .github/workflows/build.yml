@@ -52,14 +52,15 @@ jobs:
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           
-          # builderに見つからないように MY_ をつける（これでフリーズを回避）
+          # カスタムスクリプト用の変数
           MY_APPLE_API_KEY: ${{ github.workspace }}/AuthKey.p8
           MY_APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           MY_APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          MY_APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           
           DEBUG: electron-builder,electron-notarize,macos-sign
           CSC_IDENTITY_AUTO_DISCOVERY: ${{ matrix.os == 'macos-latest' && 'true' || 'false' }}
-
+          
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
