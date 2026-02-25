@@ -37,13 +37,13 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "" build.keychain
           rm certificate.p12
 
-      # API Keyのデコード（Macのみ）
       - name: Prepare Apple API Key
         if: matrix.os == 'macos-latest'
         run: |
-          echo "${{ secrets.APPLE_API_KEY }}" | base64 --decode > ${{ github.workspace }}/AuthKey.p8
+          cat << 'EOF' > ${{ github.workspace }}/AuthKey.p8
+          ${{ secrets.APPLE_API_KEY }}
+          EOF
           chmod 600 ${{ github.workspace }}/AuthKey.p8
-          head -n 1 ${{ github.workspace }}/AuthKey.p8
 # ビルドと公証
       - name: Build App
         run: npx electron-builder --publish never
