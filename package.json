@@ -15,25 +15,26 @@
     "electron": "^34.0.0",
     "electron-builder": "^24.13.3"
   },
-"build": {
-  "appId": "com.garuneko.aerune",
-  "productName": "Aerune",
-  "directories": {
-    "output": "dist"
-  },
-  "mac": {
-    "category": "public.app-category.social-networking",
-    "target": ["dmg", "zip"],
-    "hardenedRuntime": true,
-    "gatekeeperAssess": false,
-    "entitlements": "build/entitlements.mac.plist",
-    "entitlementsInherit": "build/entitlements.mac.inherit.plist"
-  },
-  "win": {
-    "target": "nsis"
-  },
-  "nsis": {
-    "oneClick": false,
-    "allowToChangeInstallationDirectory": true
+  "build": {
+    "appId": "com.garuneko.aerune",
+    "productName": "Aerune",
+    "directories": {
+      "output": "dist"
+    },
+    "mac": {
+      "category": "public.app-category.social-networking",
+      "target": ["dmg", "zip"],
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.inherit.plist"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
   }
 }
