@@ -15,19 +15,20 @@
     "electron": "^34.0.0",
     "electron-builder": "^24.13.3"
   },
-  "build": {
-    "appId": "com.garuneko.aerune",
-    "productName": "Aerune",
-    "directories": {
-      "output": "dist",
-      "buildResources": "build"
-    },
-    "publish": [
-      {
-        "provider": "github"
-      }
-    ],
-    "mac": {
+ "build": {
+  "appId": "com.garuneko.app",
+  "afterSign": "scripts/notarize.js",
+  "mac": {
+    "category": "public.app-category.developer-tools",
+    "target": ["dmg", "zip"],
+    "hardenedRuntime": true,
+    "gatekeeperAssess": false,
+    "entitlements": "build/entitlements.mac.plist",
+    "entitlementsInherit": "build/entitlements.mac.plist",
+    "notarize": false 
+  }
+}
+  "mac": {
       "category": "public.app-category.social-networking",
       "target": [
         "dmg",
