@@ -19,6 +19,7 @@
   },
   "build": {
     "appId": "com.garuneko.app",
+    "afterSign": "scripts/notarize.js",
     "mac": {
       "category": "public.app-category.social-networking",
       "target": [
