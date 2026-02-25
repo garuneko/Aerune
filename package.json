@@ -18,20 +18,19 @@
     "electron-builder": "^24.13.3"
   },
   "build": {
-    "appId": "com.garuneko.app",
-    "afterSign": "scripts/notarize.js",
-    "mac": {
-      "category": "public.app-category.social-networking",
-      "target": [
-        "dmg",
-        "zip"
-      ],
-      "hardenedRuntime": true,
-      "gatekeeperAssess": false,
-      "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.plist",
-      "icon": "build/icon.icns",
-      "notarize": false
+  "appId": "com.garuneko.app",
+  "afterSign": "scripts/notarize.js",
+  "mac": {
+    "category": "public.app-category.social-networking",
+    "target": ["dmg", "zip"],
+    "hardenedRuntime": true,
+    "gatekeeperAssess": false,
+    "entitlements": "build/entitlements.mac.plist",
+    "entitlementsInherit": "build/entitlements.mac.plist",
+    "icon": "build/icon.icns",
+    "notarize": false
+  }
+}
     },
     "win": {
       "target": "nsis",
