@@ -2,10 +2,8 @@ name: Build Apps
 
 on:
   push:
-    branches:
-      - main
-    tags:
-      - "v*"
+    branches: [main]
+    tags: ["v*"]
   workflow_dispatch:
 
 permissions:
@@ -20,44 +18,37 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: "npm"
-
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
-      - name: Decode API Key (Mac)
+      # API Keyのデコード（Macのみ）
+      - name: Prepare Apple API Key
         if: matrix.os == 'macos-latest'
-        env:
-          API_KEY_BASE64: ${{ secrets.APPLE_API_KEY }}
-        run: echo "$API_KEY_BASE64" | base64 --decode > ${{ github.workspace }}/api_key.p8
+        run: |
+          echo "${{ secrets.APPLE_API_KEY_BASE64 }}" | base64 --decode > ${{ github.workspace }}/AuthKey.p8
+          chmod 600 ${{ github.workspace }}/AuthKey.p8
+          head -n 1 ${{ github.workspace }}/AuthKey.p8
 
-      - name: Build App (Mac)
-        if: matrix.os == 'macos-latest'
+      # ビルドと公証（一本化）
+      - name: Build App
         run: npx electron-builder --publish never
         env:
-          DEBUG: electron-builder,electron-notarize
+          # 共通
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          # Mac用設定
+          APPLE_API_KEY: ${{ github.workspace }}/AuthKey.p8
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-          APPLE_API_KEY: ${{ github.workspace }}/api_key.p8
-
-      - name: Build App (Windows)
-        if: matrix.os == 'windows-latest'
-        run: npx electron-builder --publish never
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          DEBUG: electron-builder,electron-notarize
+          # Windows用設定
           CSC_IDENTITY_AUTO_DISCOVERY: false
 
-      - name: Upload Artifacts (Actions)
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: Aerune-Build-${{ matrix.os }}
@@ -67,7 +58,6 @@ jobs:
             dist/*.zip
             dist/*.AppImage
             dist/latest*.yml
-            dist/*.blockmap
           if-no-files-found: ignore
 
       - name: Upload to GitHub Releases
