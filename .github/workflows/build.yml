@@ -32,22 +32,24 @@ jobs:
           chmod 600 ${{ github.workspace }}/AuthKey.p8
           head -n 1 ${{ github.workspace }}/AuthKey.p8
 
-      # ビルドと公証（一本化）
+      # ビルドと公証
       - name: Build App
         run: npx electron-builder --publish never
         env:
-          # 共通
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Mac用設定
+          # 明示的にこれを使うように指定
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          # Apple API 関連
           APPLE_API_KEY: ${{ github.workspace }}/AuthKey.p8
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          # 追加：これを入れると adhoc 署名を防げる場合があります
+          CSC_IDENTITY_AUTO_DISCOVERY: true 
+          # デバッグログをさらに強化
           DEBUG: electron-builder,electron-notarize,macos-sign
           # Windows用設定
           CSC_IDENTITY_AUTO_DISCOVERY: false
-
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
