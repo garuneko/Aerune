@@ -15,40 +15,25 @@
     "electron": "^34.0.0",
     "electron-builder": "^24.13.3"
   },
-  "build": {
-    "appId": "com.garuneko.aerune",
-    "productName": "Aerune",
-    "directories": {
-      "output": "dist",
-      "buildResources": "build"
-    },
-    "publish": [
-      {
-        "provider": "github"
-      }
-    ],
-    "mac": {
-      "category": "public.app-category.utilities",
-      "target": [
-        "dmg",
-        "zip"
-      ],
-      "hardenedRuntime": true,
-      "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.inherit.plist",
-      "icon": "build/icon.icns"
-    },
-    "win": {
-      "target": "nsis",
-      "icon": "build/icon.ico"
-    },
-    "linux": {
-      "target": "AppImage",
-      "icon": "build/icon.png"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true
-    }
+"build": {
+  "appId": "com.garuneko.aerune",
+  "productName": "Aerune",
+  "directories": {
+    "output": "dist"
+  },
+  "mac": {
+    "category": "public.app-category.social-networking",
+    "target": ["dmg", "zip"],
+    "hardenedRuntime": true,
+    "gatekeeperAssess": false,
+    "entitlements": "build/entitlements.mac.plist",
+    "entitlementsInherit": "build/entitlements.mac.inherit.plist"
+  },
+  "win": {
+    "target": "nsis"
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true
   }
 }
