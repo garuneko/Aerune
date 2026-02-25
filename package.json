@@ -37,6 +37,9 @@
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.inherit.plist",
+      "notarize": {
+        "teamId": "9QAS82P23Q"
+      },
       "icon": "build/icon.icns"
     },
     "win": {
