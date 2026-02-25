@@ -8,9 +8,10 @@
     "start": "electron .",
     "dist": "electron-builder"
   },
-  "dependencies": {
-    "@atproto/api": "^0.13.20"
-  },
+ "devDependencies": {
+  "electron": "^34.0.0",
+  "electron-builder": "24.6.4"
+}
   "devDependencies": {
     "electron": "^34.0.0",
     "electron-builder": "^24.13.3"
@@ -28,7 +29,6 @@
   "gatekeeperAssess": false,
   "entitlements": "build/entitlements.mac.plist",
   "entitlementsInherit": "build/entitlements.mac.inherit.plist",
-  "bundleVersion": "2.5.2"
 }
     "win": {
       "target": "nsis"
