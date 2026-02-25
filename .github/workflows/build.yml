@@ -34,6 +34,7 @@ jobs:
 
       - name: Build App (Mac)
         if: matrix.os == 'macos-latest'
+        timeout-minutes: 60
         run: npx electron-builder --publish never
         env:
           DEBUG: electron-builder,electron-notarize # ←★ここに追加したよ！
