@@ -25,10 +25,11 @@ jobs:
         run: npm install
 
       # API Keyのデコード（Macのみ）
+      # Secret名をスクリーンショットに合わせて APPLE_API_KEY に修正しました
       - name: Prepare Apple API Key
         if: matrix.os == 'macos-latest'
         run: |
-          echo "${{ secrets.APPLE_API_KEY_BASE64 }}" | base64 --decode > ${{ github.workspace }}/AuthKey.p8
+          echo "${{ secrets.APPLE_API_KEY }}" | base64 --decode > ${{ github.workspace }}/AuthKey.p8
           chmod 600 ${{ github.workspace }}/AuthKey.p8
           head -n 1 ${{ github.workspace }}/AuthKey.p8
 
@@ -37,19 +38,18 @@ jobs:
         run: npx electron-builder --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # 明示的にこれを使うように指定
+          # 共通の署名設定
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           # Apple API 関連
           APPLE_API_KEY: ${{ github.workspace }}/AuthKey.p8
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-          # 追加：これを入れると adhoc 署名を防げる場合があります
-          CSC_IDENTITY_AUTO_DISCOVERY: true 
-          # デバッグログをさらに強化
+          # デバッグログ
           DEBUG: electron-builder,electron-notarize,macos-sign
-          # Windows用設定
-          CSC_IDENTITY_AUTO_DISCOVERY: false
+          # OSごとに設定を変えるための三項演算子的な書き方
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ matrix.os == 'macos-latest' && 'true' || 'false' }}
+
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
