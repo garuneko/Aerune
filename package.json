@@ -28,20 +28,18 @@
       }
     ],
     "mac": {
-      "category": "public.app-category.social-networking",
-      "target": [
-        "dmg",
-        "zip"
-      ],
-      "hardenedRuntime": true,
-      "gatekeeperAssess": false,
-      "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.inherit.plist",
-      "notarize": {
-        "teamId": "9QAS82P23Q"
-      },
-      "icon": "build/icon.icns"
-    },
+  "category": "public.app-category.social-networking",
+  "target": [
+    "dmg",
+    "zip"
+  ],
+  "hardenedRuntime": true,
+  "gatekeeperAssess": false,
+  "entitlements": "build/entitlements.mac.plist",
+  "entitlementsInherit": "build/entitlements.mac.inherit.plist",
+  "notarize": false,
+  "icon": "build/icon.icns"
+}
     "win": {
       "target": "nsis",
       "icon": "build/icon.ico"
