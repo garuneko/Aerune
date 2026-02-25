@@ -30,7 +30,8 @@
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
-      "icon": "build/icon.icns"
+      "icon": "build/icon.icns",
+      "notarize": false
     },
     "win": {
       "target": "nsis",
