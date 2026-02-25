@@ -30,7 +30,6 @@
     "icon": "build/icon.icns",
     "notarize": false
   }
-}
     },
     "win": {
       "target": "nsis",
