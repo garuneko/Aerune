@@ -2,7 +2,7 @@ Bluesky専用パソコン用クライアントアプリ　Aerune(エアルネ)
 
 ログインにはBlueskyの「アプリパスワード」を使用してください。
 
-## Mac版をご利用の方へ（初回起動時の注意）
+## Mac版をご利用の方へ（初回起動時の注意）※v2.5.1以前の場合
 
 macOSのセキュリティ機能（Gatekeeper）により、初回起動時に「壊れているため開けません。ゴミ箱に入れる必要があります」などの警告が表示される場合があります。
 
@@ -35,7 +35,7 @@ MIT License
 A dedicated desktop client application for Bluesky.
 Please use your Bluesky "App Password" to log in.
 
-## For Mac Users (First Launch Instructions)
+## For Mac Users (First Launch Instructions) For versions prior to v2.5.1
 
 Due to macOS security features (Gatekeeper), you may see a warning message such as "The app is damaged and can't be opened. You should move it to the Trash" when launching the app for the first time.
 
