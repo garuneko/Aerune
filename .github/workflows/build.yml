@@ -39,10 +39,8 @@ jobs:
 
       - name: Prepare Apple API Key
         if: matrix.os == 'macos-latest'
-        env:
-          API_KEY_TEXT: ${{ secrets.APPLE_API_KEY }}
         run: |
-          printf "%s\n" "$API_KEY_TEXT" > ${{ github.workspace }}/AuthKey.p8
+          echo "${{ secrets.APPLE_API_KEY }}" | base64 --decode > ${{ github.workspace }}/AuthKey.p8
           chmod 600 ${{ github.workspace }}/AuthKey.p8
           
 # ビルドと公証
