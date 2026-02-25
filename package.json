@@ -6,29 +6,21 @@
   "author": "garu neko",
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder"
+    "dist": "electron-builder",
+    "build": "electron-builder"
   },
   "dependencies": {
     "@atproto/api": "^0.13.20"
   },
   "devDependencies": {
+    "@electron/notarize": "^2.5.0",
     "electron": "^34.0.0",
     "electron-builder": "^24.13.3"
   },
- "build": {
-  "appId": "com.garuneko.app",
-  "afterSign": "scripts/notarize.js",
-  "mac": {
-    "category": "public.app-category.developer-tools",
-    "target": ["dmg", "zip"],
-    "hardenedRuntime": true,
-    "gatekeeperAssess": false,
-    "entitlements": "build/entitlements.mac.plist",
-    "entitlementsInherit": "build/entitlements.mac.plist",
-    "notarize": false,
-  }
-}
-  "mac": {
+  "build": {
+    "appId": "com.garuneko.app",
+    "afterSign": "scripts/notarize.js",
+    "mac": {
       "category": "public.app-category.social-networking",
       "target": [
         "dmg",
@@ -37,8 +29,9 @@
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.inherit.plist",
-      "icon": "build/icon.icns"
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "icon": "build/icon.icns",
+      "notarize": false
     },
     "win": {
       "target": "nsis",
