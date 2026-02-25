@@ -44,7 +44,7 @@ jobs:
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          DEBUG: electron-builder,electron-notarize
+          DEBUG: electron-builder,electron-notarize,macos-sign
           # Windows用設定
           CSC_IDENTITY_AUTO_DISCOVERY: false
 
