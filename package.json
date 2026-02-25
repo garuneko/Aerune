@@ -22,13 +22,14 @@
       "output": "dist"
     },
     "mac": {
-      "category": "public.app-category.social-networking",
-      "target": ["dmg", "zip"],
-      "hardenedRuntime": true,
-      "gatekeeperAssess": false,
-      "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.inherit.plist"
-    },
+  "category": "public.app-category.social-networking",
+  "target": ["dmg", "zip"],
+  "hardenedRuntime": true,
+  "gatekeeperAssess": false,
+  "entitlements": "build/entitlements.mac.plist",
+  "entitlementsInherit": "build/entitlements.mac.inherit.plist",
+  "bundleVersion": "2.5.2"
+}
     "win": {
       "target": "nsis"
     },
