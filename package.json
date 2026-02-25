@@ -38,7 +38,7 @@
   "entitlements": "build/entitlements.mac.plist",
   "entitlementsInherit": "build/entitlements.mac.inherit.plist",
   "notarize": false,
-  "icon": "build/icon.icns"
+  "icon": "build/icon.icns",
 }
     "win": {
       "target": "nsis",
