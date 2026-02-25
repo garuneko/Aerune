@@ -24,8 +24,20 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      # 証明書（p12）をインポートするためのキーチェーン作成（Macのみ）
+      - name: Install Apple Certificate
+        if: matrix.os == 'macos-latest'
+        run: |
+          security create-keychain -p "" build.keychain
+          security list-keychains -s build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "" build.keychain
+          echo "${{ secrets.CSC_LINK }}" | base64 --decode > certificate.p12
+          security import certificate.p12 -k build.keychain -P "${{ secrets.CSC_KEY_PASSWORD }}" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "" build.keychain
+          rm certificate.p12
+
       # API Keyのデコード（Macのみ）
-      # Secret名をスクリーンショットに合わせて APPLE_API_KEY に修正しました
       - name: Prepare Apple API Key
         if: matrix.os == 'macos-latest'
         run: |
@@ -38,16 +50,12 @@ jobs:
         run: npx electron-builder --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # 共通の署名設定
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          # Apple API 関連
           APPLE_API_KEY: ${{ github.workspace }}/AuthKey.p8
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-          # デバッグログ
           DEBUG: electron-builder,electron-notarize,macos-sign
-          # OSごとに設定を変えるための三項演算子的な書き方
           CSC_IDENTITY_AUTO_DISCOVERY: ${{ matrix.os == 'macos-latest' && 'true' || 'false' }}
 
       - name: Upload Artifacts
