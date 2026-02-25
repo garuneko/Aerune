@@ -47,7 +47,9 @@ jobs:
 
       # ビルドと公証
       - name: Build App
-        run: npx electron-builder --publish never
+        run: |
+          xattr -cr .
+          npx electron-builder --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_LINK: ${{ secrets.CSC_LINK }}
