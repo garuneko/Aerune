@@ -24,7 +24,7 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      # 証明書（p12）をインポートするためのキーチェーン作成（Macのみ）
+      # 成功したキーチェーン作成（維持）
       - name: Install Apple Certificate
         if: matrix.os == 'macos-latest'
         run: |
@@ -37,29 +37,28 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "" build.keychain
           rm certificate.p12
 
+      # 成功したAPI Key復元（維持）
       - name: Prepare Apple API Key
         if: matrix.os == 'macos-latest'
         run: |
           echo "${{ secrets.APPLE_API_KEY }}" | base64 --decode > ${{ github.workspace }}/AuthKey.p8
           chmod 600 ${{ github.workspace }}/AuthKey.p8
-          
-# ビルドと公証
+
+      # ビルドと公証（標準機能）
       - name: Build App
         run: npx electron-builder --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          
-          # カスタムスクリプト用の変数
-          MY_APPLE_API_KEY: ${{ github.workspace }}/AuthKey.p8
-          MY_APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-          MY_APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-          MY_APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          
-          DEBUG: electron-builder,electron-notarize,macos-sign
+          # electron-builderが自動で認識する変数名に戻す
+          APPLE_API_KEY: ${{ github.workspace }}/AuthKey.p8
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          # どこで止まったか完全追跡するためのログ設定
+          DEBUG: electron-builder,electron-notarize*
           CSC_IDENTITY_AUTO_DISCOVERY: ${{ matrix.os == 'macos-latest' && 'true' || 'false' }}
-          
+
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
