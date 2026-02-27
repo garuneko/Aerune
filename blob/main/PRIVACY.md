@@ -11,4 +11,4 @@ The App displays User-Generated Content (UGC) from the Bluesky network. There is
 
 ### 3. Contact Us
 If you have any questions or suggestions about our Privacy Policy, do not hesitate to contact us at:
-[あなたの連絡先メールアドレス、またはGitHubのURLやBlueskyのハンドル名]
+garuneko@gmail.com
