@@ -29,7 +29,7 @@ MIT License
 
 ## 開発者
 がる ([@garuneko](https://garuneko.com))
-iOS/iPados https://apps.apple.com/app/aerune/id6759705337
+iOS/iPadOS https://apps.apple.com/app/aerune/id6759705337
 
 # Aerune - Bluesky Desktop Client
 
@@ -66,5 +66,5 @@ MIT License
 ## Developer
 
 garu ([@garuneko](https://garuneko.com))
-iOS/iPados https://apps.apple.com/app/aerune/id6759705337
+iOS/iPadOS https://apps.apple.com/app/aerune/id6759705337
 
