@@ -71,7 +71,7 @@ class BskyAPI {
     async deleteRepost(repostUri) { return await this.agent.deleteRepost(repostUri); }
 
     // ─── 投稿・削除 ───────────────────────────────────────────────
-    async post(postData) { return await this.agent.post(postData); }
+    async post(postData) { return await this.agent.post({ ...postData, via:"Aerune" }); }
     async deletePost(uri) { return await this.agent.deletePost(uri); }
 
     // ─── Follow ───────────────────────────────────────────────────
