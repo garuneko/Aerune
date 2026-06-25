@@ -153,6 +153,28 @@ async doLike(uri, cid, likeUri) {
         } catch (e) { alert('Failed to pin/unpin: ' + e.message); }
     }
 
+    async reportPost(uri, cid, reasonType, reason) {
+        try {
+            await this.api.reportPost(uri, cid, reasonType, reason);
+            alert(this.t('report_success'));
+        } catch (e) {
+            console.error('reportPost:', e);
+            alert(`${this.t('report_failed')}\n${e.message || e}`);
+            throw e;
+        }
+    }
+
+    async reportAccount(did, reasonType, reason) {
+        try {
+            await this.api.reportAccount(did, reasonType, reason);
+            alert(this.t('report_success'));
+        } catch (e) {
+            console.error('reportAccount:', e);
+            alert(`${this.t('report_failed')}\n${e.message || e}`);
+            throw e;
+        }
+    }
+
     // ─── Logout ──────────────────────────────────────────────────
     async logout(currentDid, savedAccounts, onEmpty, onSwitch) {
         if (!confirm(this.t('logout_confirm'))) return;

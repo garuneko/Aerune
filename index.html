@@ -30,6 +30,7 @@
             <div id="account-list" class="account-list"></div>
             <ul class="nav-links" style="margin-top: 20px;">
                 <li id="nav-home" class="active" data-i18n="nav_home">ホーム</li>
+                <li id="nav-feeds" data-i18n="nav_feeds">フィード</li>
                 <li id="nav-notifications" style="position: relative;">
                     <span data-i18n="nav_notifications">通知</span>
                     <span id="notif-badge" class="notif-badge hidden"></span>
@@ -50,7 +51,10 @@
                 <h2 id="view-title" data-i18n="nav_home">Home</h2>
                 <button id="refresh-btn" class="icon-btn" style="background:none; border:none; cursor:pointer;"></button>
             </header>
+            <div id="timeline-source-bar" class="feed-source-bar hidden"></div>
+            <div id="timeline-notice" class="timeline-notice hidden"></div>
             <div id="timeline"></div>
+            <div id="feeds-view" class="hidden"></div>
             <div id="notifications" class="hidden"></div>
             <div id="chat-view" class="hidden">
                 <div class="chat-container">
@@ -66,6 +70,10 @@
                 </div>
             </div>
             <div id="search-view" class="hidden">
+                <div class="search-mode-tabs" role="tablist">
+                    <button type="button" class="search-mode-btn active" data-act="search-mode" data-mode="posts" data-i18n="search_mode_posts">投稿</button>
+                    <button type="button" class="search-mode-btn" data-act="search-mode" data-mode="users" data-i18n="search_mode_users">ユーザー</button>
+                </div>
                 <div class="search-bar">
                     <input type="text" id="search-input" data-i18n-placeholder="search_placeholder"><button id="search-exec-btn" data-i18n="search_btn">検索</button>
                 </div>
@@ -83,8 +91,10 @@
                     <div style="margin-top: 10px; margin-bottom: 20px;">
                         <label data-i18n="settings_lang" style="display:block; margin-bottom:8px; font-weight:bold;">言語 / Language</label>
                         <select id="setting-lang" style="padding: 8px; border-radius: 5px; border: 1px solid #ccc; width: 100%; max-width: 300px;">
-                            <option value="ja">日本語</option>
-                            <option value="en">English</option>
+                            <option value="ja" data-i18n="lang_ja">日本語</option>
+                            <option value="en" data-i18n="lang_en">English</option>
+                            <option value="pt-BR" data-i18n="lang_pt-BR">Português (Brasil)</option>
+                            <option value="ar" data-i18n="lang_ar">العربية</option>
                         </select>
                     </div>
                     <div style="margin-bottom: 20px;">
@@ -102,6 +112,13 @@
                         <button id="btn-load-blocks" class="sidebar-action-btn" style="width:auto; padding:8px 16px; background:#d93025;" data-i18n="settings_blocks">ブロック中のアカウント</button>
                     </div>
                     <div id="moderation-list-container" style="background:#f9f9f9; border-radius:8px; max-height:300px; overflow-y:auto;"></div>
+
+                    <h3 data-i18n="settings_about" style="margin-top:40px; margin-bottom:15px; border-bottom:1px solid #ccc; padding-bottom:5px;">About</h3>
+                    <div class="about-box">
+                        <div><strong>Aerune</strong> <span id="about-version">v2.5.2</span></div>
+                        <p data-i18n="about_mit">Aerune is distributed under the MIT License.</p>
+                        <p data-i18n="about_ffmpeg">Video compression uses an independent LGPL FFmpeg executable on macOS arm64.</p>
+                    </div>
                 </div>
             </div>
 
@@ -111,10 +128,14 @@
                 <div class="post-form-inner">
                     <label for="image-input" class="image-label" style="cursor:pointer;"><img src="image.svg" alt="image" style="width: 24px; height: 24px; vertical-align: middle;"></label>
                     <input type="file" id="image-input" accept="image/*" multiple style="display:none;">
+                    <button id="video-pick-btn" class="icon-btn" type="button" title="Video"></button>
+                    <input type="file" id="video-input" accept="video/*" style="display:none;">
                     <textarea id="post-input" data-i18n-placeholder="post_placeholder" rows="1"></textarea>
                     <button id="post-btn" data-i18n="send">送信</button>
                 </div>
                 <div id="image-preview-container"></div>
+                <div id="video-preview-container"></div>
+                <div id="post-progress" class="post-progress hidden"></div>
             </div>
         </main>
     </div>
@@ -130,8 +151,28 @@
     </div>
 </div>
 </div>
-    <div id="image-modal" class="hidden"><span id="modal-close">&times;</span><img id="modal-image" src=""></div>
+    <div id="image-modal" class="hidden">
+        <span id="modal-close">&times;</span>
+        <button id="modal-prev" class="media-nav-btn" type="button">‹</button>
+        <img id="modal-image" src="">
+        <button id="modal-next" class="media-nav-btn" type="button">›</button>
+        <div id="modal-counter"></div>
+    </div>
     <div id="quote-modal" class="hidden"><div class="modal-content"><span id="quote-modal-close" class="modal-close-btn">&times;</span><div id="quote-modal-body"></div></div></div>
+    <div id="report-modal" class="hidden">
+        <div class="modal-content report-content">
+            <span id="report-modal-close" class="modal-close-btn">&times;</span>
+            <h3 data-i18n="report_title">通報</h3>
+            <label for="report-reason" data-i18n="report_reason">理由</label>
+            <select id="report-reason"></select>
+            <label for="report-note" data-i18n="report_note">補足</label>
+            <textarea id="report-note" rows="4"></textarea>
+            <div class="report-actions">
+                <button type="button" id="report-cancel" data-i18n="cancel">キャンセル</button>
+                <button type="button" id="report-submit" data-i18n="report_do">通報</button>
+            </div>
+        </div>
+    </div>
     
     <div id="ctx-menu" class="ctx-menu hidden"></div>
 

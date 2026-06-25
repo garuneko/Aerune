@@ -1,0 +1,21 @@
+
+  configuration:
+    --prefix=/tmp/aerune-ffmpeg-darwin-arm64/install
+    --arch=arm64
+    --target-os=darwin
+    --cc=clang
+    --extra-cflags='-mmacosx-version-min=12.0'
+    --extra-ldflags='-mmacosx-version-min=12.0'
+    --disable-gpl
+    --disable-nonfree
+    --disable-libx264
+    --disable-libx265
+    --disable-libfdk-aac
+    --disable-debug
+    --disable-doc
+    --disable-ffplay
+    --disable-ffprobe
+    --disable-network
+    --enable-pthreads
+
+Exiting with exit code 0

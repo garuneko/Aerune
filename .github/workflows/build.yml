@@ -59,6 +59,10 @@ jobs:
           DEBUG: electron-builder,electron-notarize*
           CSC_IDENTITY_AUTO_DISCOVERY: ${{ matrix.os == 'macos-latest' && 'true' || 'false' }}
 
+      - name: Package FFmpeg Compliance Assets
+        if: matrix.os == 'macos-latest'
+        run: scripts/package-ffmpeg-compliance.sh
+
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -69,6 +73,8 @@ jobs:
             dist/*.zip
             dist/*.AppImage
             dist/latest*.yml
+            dist/ffmpeg-lgpl-darwin-arm64-*.tar.gz
+            dist/ffmpeg-lgpl-darwin-arm64-*.tar.gz.sha256
           if-no-files-found: ignore
 
       - name: Upload to GitHub Releases
@@ -79,5 +85,7 @@ jobs:
             dist/*.exe
             dist/*.dmg
             dist/*.zip
+            dist/ffmpeg-lgpl-darwin-arm64-*.tar.gz
+            dist/ffmpeg-lgpl-darwin-arm64-*.tar.gz.sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

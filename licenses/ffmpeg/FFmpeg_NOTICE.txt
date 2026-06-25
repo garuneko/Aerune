@@ -1,0 +1,3 @@
+Aerune includes an independent FFmpeg command-line executable for local video compression.
+FFmpeg is licensed under the GNU Lesser General Public License (LGPL).
+The corresponding FFmpeg source, build configuration, and local changes must be attached to the same GitHub Release as the Aerune binary.
