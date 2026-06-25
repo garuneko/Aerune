@@ -2211,7 +2211,28 @@ function applyTranslations() {
     applyDisplayPreferences();
     document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.getAttribute('data-i18n')); });
     document.querySelectorAll('[data-i18n-placeholder]').forEach(el => { el.placeholder = t(el.getAttribute('data-i18n-placeholder')); });
+    document.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = t(el.getAttribute('data-i18n-title')); });
     if (els.videoPickBtn) els.videoPickBtn.title = t('video_select');
+    refreshLocalizedDynamicUi();
+}
+
+function refreshLocalizedDynamicUi() {
+    if (els.viewTitle) {
+        const key = els.viewTitle.getAttribute('data-i18n');
+        if (key) els.viewTitle.textContent = t(key);
+    }
+    document.querySelectorAll('.post-timestamp[data-ts]').forEach(el => {
+        el.textContent = window.aeruneTimeFormat === 'absolute'
+            ? new Date(el.dataset.ts).toLocaleString(currentLang)
+            : formatRelative(new Date(el.dataset.ts), currentLang);
+    });
+    renderTimelineNotice();
+    renderFeedControls();
+    if (els.feedsView && !els.feedsView.classList.contains('hidden')) renderFeedsView();
+    renderMuteRulesList();
+    renderSettingsAccounts();
+    updateVideoPreview();
+    renderQuotePreview();
 }
 
 // ─── 投稿フォーム ─────────────────────────────────────────────────
@@ -3315,6 +3336,15 @@ async function initApp() {
     get('search-exec-btn')?.addEventListener('click', () => window.execSearch(undefined, false));
     get('search-input')?.addEventListener('input', () => scheduleSearch(false));
     get('search-input')?.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); window.execSearch(undefined, false); } });
+    get('setting-lang')?.addEventListener('change', e => {
+        const nextLang = normalizeLanguage(e.target.value || currentLang);
+        currentLang = nextLang;
+        localStorage.setItem('aerune_lang', nextLang);
+        e.target.value = nextLang;
+        applyTranslations();
+        const msg = get('settings-msg');
+        if (msg) msg.textContent = '';
+    });
     get('add-account-btn')?.addEventListener('click', () => { 
         document.getElementById('id').value = '';
         document.getElementById('pw').value = '';
@@ -3346,7 +3376,6 @@ async function initApp() {
         localStorage.setItem('aerune_restore_scroll', nrs.toString());
         localStorage.setItem('aerune_image_display_style', nis);
         localStorage.setItem('aerune_font_size_level', String(nfl));
-        saveMuteWordsFromSettings();
 
         currentLang = nl; nsfwBlur = nb; showBookmarksConfig = nbm;
         autoRefreshEnabled = nar;
@@ -3354,6 +3383,7 @@ async function initApp() {
         fontSizeLevel = nfl;
         window.aeruneTimeFormat = ntf;
         window.aeruneImageDisplayStyle = nis;
+        saveMuteWordsFromSettings();
         
         get('nav-bookmarks')?.style.setProperty('display', nbm ? 'block' : 'none');
         applyTranslations();

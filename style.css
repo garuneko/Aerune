@@ -979,3 +979,110 @@ body[data-font-size="2"] .msg-bubble { font-size: 20px; }
 .mod-list-row img { width: 42px; height: 42px; border-radius: 8px; background: #e2e8f0; object-fit: cover; }
 .mod-list-row div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .mod-list-row span { color: var(--text-sub); font-size: 12px; }
+
+body.rtl {
+    text-align: right;
+}
+body.rtl input,
+body.rtl textarea,
+body.rtl select {
+    direction: rtl;
+    text-align: right;
+}
+body.rtl .sidebar {
+    border-right: none;
+    border-left: 1px solid var(--border-color);
+}
+body.rtl .content-header,
+body.rtl .post-form-inner,
+body.rtl .search-bar,
+body.rtl .search-mode-tabs,
+body.rtl .settings-field,
+body.rtl .settings-check,
+body.rtl .settings-account-row,
+body.rtl .settings-account-actions,
+body.rtl .mute-rule-form,
+body.rtl .mute-rule-check,
+body.rtl .mod-sub-form,
+body.rtl .mod-sub-actions,
+body.rtl .mod-list-row,
+body.rtl .mod-rule-row,
+body.rtl .feed-source-controls,
+body.rtl .feed-card-actions,
+body.rtl .chat-header,
+body.rtl .chat-input-area,
+body.rtl .convo-item,
+body.rtl .profile-actions {
+    direction: rtl;
+}
+body.rtl .post-avatar {
+    margin-right: 0;
+    margin-left: 12px;
+}
+body.rtl .post-author {
+    margin-right: 0;
+    margin-left: 5px;
+}
+body.rtl #image-preview-container,
+body.rtl #video-preview-container {
+    padding-left: 0;
+    padding-right: 45px;
+}
+body.rtl .svg-icon,
+body.rtl .ctx-menu-item .svg-icon {
+    margin-right: 0;
+    margin-left: 8px;
+}
+body.rtl .relationship-badge {
+    margin-left: 0;
+    margin-right: 8px;
+}
+body.rtl .convo-list {
+    border-right: none;
+    border-left: 1px solid var(--border-color);
+}
+body.rtl .convo-item.active {
+    border-right: none;
+    border-left: 3px solid var(--bsky-blue);
+}
+body.rtl .notif-badge {
+    right: auto;
+    left: 5px;
+}
+body.rtl .modal-close-btn,
+body.rtl #modal-close {
+    right: auto;
+    left: 30px;
+}
+body.rtl #modal-prev {
+    left: auto;
+    right: 24px;
+}
+body.rtl #modal-next {
+    right: auto;
+    left: 24px;
+}
+body.rtl .thread-line::before {
+    left: auto;
+    right: 38px;
+}
+body.rtl .notif-avatar-stack {
+    padding-left: 0;
+    padding-right: 2px;
+}
+body.rtl .notif-avatar {
+    margin-left: 0;
+    margin-right: -12px;
+}
+body.rtl .notif-avatar:first-child {
+    margin-right: 0;
+}
+body.rtl .external-card,
+body.rtl .embedded-quote,
+body.rtl .feed-row,
+body.rtl .feed-card,
+body.rtl .settings-panel,
+body.rtl .moderation-panel,
+body.rtl .about-box {
+    text-align: right;
+}
