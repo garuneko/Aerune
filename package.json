@@ -54,29 +54,12 @@
       "!node_modules/**/jest.config.*",
       "!node_modules/**/jest.setup.*",
       "!node_modules/**/scripts/**",
-      "!node_modules/**/src/**",
       "!node_modules/**/test/**",
       "!node_modules/**/tests/**",
       "!node_modules/**/tsconfig*.json",
       "!scripts/**",
       "!vendor/**",
       "!main.js.sb-*"
-    ],
-    "extraResources": [
-      {
-        "from": "vendor/ffmpeg",
-        "to": "bin/ffmpeg",
-        "filter": [
-          "**/*"
-        ]
-      },
-      {
-        "from": "licenses",
-        "to": "licenses",
-        "filter": [
-          "**/*"
-        ]
-      }
     ],
     "mac": {
       "category": "public.app-category.social-networking",
@@ -91,7 +74,23 @@
       "binaries": [
         "Contents/Resources/bin/ffmpeg/darwin-arm64/ffmpeg"
       ],
-      "icon": "icon.icns"
+      "icon": "icon.icns",
+      "extraResources": [
+        {
+          "from": "vendor/ffmpeg",
+          "to": "bin/ffmpeg",
+          "filter": [
+            "**/*"
+          ]
+        },
+        {
+          "from": "licenses",
+          "to": "licenses",
+          "filter": [
+            "**/*"
+          ]
+        }
+      ]
     },
     "win": {
       "target": "nsis",
