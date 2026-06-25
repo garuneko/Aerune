@@ -44,6 +44,12 @@ LGPL構成の検査:
 scripts/check-ffmpeg-lgpl.sh vendor/ffmpeg/darwin-arm64/ffmpeg
 ```
 
+Release添付用のFFmpegライセンス/ソース資料の作成:
+
+```bash
+scripts/package-ffmpeg-compliance.sh
+```
+
 Electron版の配布物には、同梱FFmpegバイナリに対応するソース、ビルド設定、差分、チェックサム、ライセンス文書を含めます。
 
 ## ライセンス
@@ -99,6 +105,12 @@ Verify the LGPL configuration with:
 
 ```bash
 scripts/check-ffmpeg-lgpl.sh vendor/ffmpeg/darwin-arm64/ffmpeg
+```
+
+Create the FFmpeg source/license archive for release uploads with:
+
+```bash
+scripts/package-ffmpeg-compliance.sh
 ```
 
 Electron releases include the matching FFmpeg source materials, build configuration, local changes, checksum, and license texts for the exact binary shipped with Aerune.

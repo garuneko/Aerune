@@ -1,7 +1,7 @@
 {
   "name": "aerune",
   "productName": "Aerune",
-  "version": "2.5.2",
+  "version": "2.5.3",
   "description": "Bluesky Client Aerune",
   "main": "main.js",
   "author": "garu neko",
@@ -87,7 +87,10 @@
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.inherit.plist",
+      "binaries": [
+        "Contents/Resources/bin/ffmpeg/darwin-arm64/ffmpeg"
+      ],
       "icon": "icon.icns"
     },
     "win": {
