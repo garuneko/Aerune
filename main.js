@@ -1,6 +1,7 @@
-const { app, BrowserWindow, ipcMain, safeStorage } = require('electron');
+const { app, BrowserWindow, ipcMain, safeStorage, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const videoCompressor = require('./video-compressor.js');
 
 let sessionPath;
 let mainWindow;
@@ -28,6 +29,10 @@ function createWindow() {
 
 app.whenReady().then(createWindow);
 
+app.on('before-quit', () => {
+  videoCompressor.cleanupAllActiveJobs().catch(() => {});
+});
+
 ipcMain.handle('save-session', (event, sessionData) => {
   try {
     const dataStr = JSON.stringify(sessionData);
@@ -48,3 +53,17 @@ ipcMain.handle('load-session', () => {
     return JSON.parse(fileData.toString());
   } catch (e) { return null; }
 });
+
+ipcMain.handle('clear-cache', async () => {
+  try {
+    await session.defaultSession.clearCache();
+    return true;
+  } catch {
+    return false;
+  }
+});
+
+ipcMain.handle('video-probe', (event, options) => videoCompressor.probeVideo(event, options));
+ipcMain.handle('video-compress-start', (event, options) => videoCompressor.compressVideo(event, options));
+ipcMain.handle('video-compress-cancel', (_event, jobId) => videoCompressor.cancelCompression(jobId));
+ipcMain.handle('video-compress-cleanup', (_event, tempDir) => videoCompressor.cleanupCompression(tempDir));

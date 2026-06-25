@@ -24,6 +24,28 @@ sudo xattr -rd com.apple.quarantine "/Applications/Aerune.app"
 - **Windows**: Windows 10以降
 - **macOS**: macOS 11 (Big Sur) 以降
 
+## 動画圧縮
+
+Electron版には、macOS arm64向けの動画圧縮機能を含みます。
+
+- FFmpegは独立したコマンドライン実行ファイルとして同梱し、`child_process.spawn` から呼び出します。
+- 同梱するmacOS arm64版FFmpegはLGPL構成でビルドし、H.264エンコードには `h264_videotoolbox` を使用します。
+- libx264/libx265/libfdk-aacなど、GPLまたはnonfree構成になるFFmpegコンポーネントは有効化しません。
+
+同梱FFmpegのビルド:
+
+```bash
+scripts/build-ffmpeg-darwin-arm64.sh
+```
+
+LGPL構成の検査:
+
+```bash
+scripts/check-ffmpeg-lgpl.sh vendor/ffmpeg/darwin-arm64/ffmpeg
+```
+
+Electron版の配布物には、同梱FFmpegバイナリに対応するソース、ビルド設定、差分、チェックサム、ライセンス文書を含めます。
+
 ## ライセンス
 MIT License
 
@@ -59,6 +81,28 @@ sudo xattr -rd com.apple.quarantine "/Applications/Aerune.app"
 - **Windows**: Windows 10 or later
 - **macOS**: macOS 11 (Big Sur) or later
 
+## Video Compression
+
+The Electron version includes video compression for macOS arm64.
+
+- FFmpeg is shipped as an independent command-line executable and invoked with `child_process.spawn`.
+- The bundled macOS arm64 FFmpeg build uses an LGPL configuration and `h264_videotoolbox` for H.264 encoding.
+- GPL or nonfree FFmpeg components, including libx264/libx265/libfdk-aac, are not enabled.
+
+Build the bundled FFmpeg binary with:
+
+```bash
+scripts/build-ffmpeg-darwin-arm64.sh
+```
+
+Verify the LGPL configuration with:
+
+```bash
+scripts/check-ffmpeg-lgpl.sh vendor/ffmpeg/darwin-arm64/ffmpeg
+```
+
+Electron releases include the matching FFmpeg source materials, build configuration, local changes, checksum, and license texts for the exact binary shipped with Aerune.
+
 ## License
 
 MIT License
@@ -67,4 +111,3 @@ MIT License
 
 garu ([@garuneko](https://garuneko.com))
 iOS/iPadOS https://apps.apple.com/app/aerune/id6759705337
-

@@ -1,9 +1,11 @@
 {
   "name": "aerune",
+  "productName": "Aerune",
   "version": "2.5.2",
   "description": "Bluesky Client Aerune",
   "main": "main.js",
   "author": "garu neko",
+  "license": "MIT",
   "scripts": {
     "start": "electron .",
     "dist": "electron-builder",
@@ -13,12 +15,69 @@
     "@atproto/api": "^0.13.20"
   },
   "devDependencies": {
-    "@electron/notarize": "^2.5.0",
+    "@electron/notarize": "^2.2.1",
     "electron": "^34.0.0",
     "electron-builder": "^24.13.3"
   },
   "build": {
     "appId": "com.garuneko.app",
+    "files": [
+      "actions.js",
+      "Aerunelogo.png",
+      "bsky-api.js",
+      "constants.js",
+      "index.html",
+      "main.js",
+      "navigation.js",
+      "package.json",
+      "post-renderer.js",
+      "preload.js",
+      "renderer.js",
+      "style.css",
+      "utils.js",
+      "video-compressor.js",
+      "view-loader.js",
+      "!**/.DS_Store",
+      "!.build/**",
+      "!.git/**",
+      "!build/**",
+      "!dist/**",
+      "!docs/**",
+      "!licenses/**",
+      "!node_modules/**/*.d.ts",
+      "!node_modules/**/*.d.ts.map",
+      "!node_modules/**/*.map",
+      "!node_modules/**/*.ts",
+      "!node_modules/**/*.tsbuildinfo",
+      "!node_modules/**/__tests__/**",
+      "!node_modules/**/docs/**",
+      "!node_modules/**/jest.config.*",
+      "!node_modules/**/jest.setup.*",
+      "!node_modules/**/scripts/**",
+      "!node_modules/**/src/**",
+      "!node_modules/**/test/**",
+      "!node_modules/**/tests/**",
+      "!node_modules/**/tsconfig*.json",
+      "!scripts/**",
+      "!vendor/**",
+      "!main.js.sb-*"
+    ],
+    "extraResources": [
+      {
+        "from": "vendor/ffmpeg",
+        "to": "bin/ffmpeg",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "licenses",
+        "to": "licenses",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
     "mac": {
       "category": "public.app-category.social-networking",
       "target": [
@@ -29,15 +88,15 @@
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
-      "icon": "build/icon.icns"
+      "icon": "icon.icns"
     },
     "win": {
       "target": "nsis",
-      "icon": "build/icon.ico"
+      "icon": "icon.ico"
     },
     "linux": {
       "target": "AppImage",
-      "icon": "build/icon.png"
+      "icon": "Aerunelogo.png"
     },
     "nsis": {
       "oneClick": false,
