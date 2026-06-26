@@ -123,3 +123,18 @@ MIT License
 
 garu ([@garuneko](https://garuneko.com))
 iOS/iPadOS https://apps.apple.com/app/aerune/id6759705337
+
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://signpath.io/),
+certificate by [SignPath Foundation](https://signpath.org/).
+
+### Team roles
+
+- Committer and reviewer: Mitsuki Hamada
+- Approver: Mitsuki Hamada
+
+### Privacy
+
+Aerune communicates with Bluesky/AT Protocol services only when requested
+by the user. For details, see the privacy policy.
