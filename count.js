@@ -1,6 +1,4 @@
 const { spawn } = require('child_process');
-
-// ⚠️ ここをがるさんのGitHubユーザー名に変更してください
 const OWNER = 'garuneko';
 const REPO = 'Aerune';
 
