@@ -208,6 +208,26 @@ function isLocalListMember(did) {
     return readLocalListMembers().some(member => member.did === did);
 }
 
+function addLocalListMember(actor, { toast = true } = {}) {
+    if (!actor?.did) return false;
+    const members = readLocalListMembers();
+    if (members.some(member => member.did === actor.did)) return false;
+    members.push({
+        did: actor.did,
+        handle: actor.handle || '',
+        displayName: actor.displayName || '',
+        avatar: actor.avatar || '',
+        addedAt: new Date().toISOString()
+    });
+    saveLocalListMembers(members);
+    syncLocalListButtons(actor.did, true);
+    renderLocalListSettings();
+    renderFeedControls();
+    refreshLocalListTimelineIfActive();
+    if (toast) showToast(t('locallist_title'), t('locallist_added'));
+    return true;
+}
+
 function toggleLocalListMember(actor) {
     if (!actor?.did) return false;
     const members = readLocalListMembers();
@@ -222,20 +242,7 @@ function toggleLocalListMember(actor) {
         showToast(t('locallist_title'), t('locallist_removed'));
         return false;
     }
-    members.push({
-        did: actor.did,
-        handle: actor.handle || '',
-        displayName: actor.displayName || '',
-        avatar: actor.avatar || '',
-        addedAt: new Date().toISOString()
-    });
-    saveLocalListMembers(members);
-    syncLocalListButtons(actor.did, true);
-    renderLocalListSettings();
-    renderFeedControls();
-    refreshLocalListTimelineIfActive();
-    showToast(t('locallist_title'), t('locallist_added'));
-    return true;
+    return addLocalListMember(actor);
 }
 
 function removeLocalListMember(did) {
@@ -247,6 +254,18 @@ function removeLocalListMember(did) {
     renderFeedControls();
     refreshLocalListTimelineIfActive();
     showToast(t('locallist_title'), t('locallist_removed'));
+}
+
+function moveLocalListMember(did, dir) {
+    const members = readLocalListMembers();
+    const idx = members.findIndex(member => member.did === did);
+    const next = idx + dir;
+    if (idx < 0 || next < 0 || next >= members.length) return;
+    const [item] = members.splice(idx, 1);
+    members.splice(next, 0, item);
+    saveLocalListMembers(members);
+    renderLocalListSettings();
+    refreshLocalListTimelineIfActive();
 }
 
 function syncLocalListButtons(did, isMember = isLocalListMember(did)) {
@@ -272,35 +291,142 @@ function currentTimelineSource() {
 function localListImportItem(item) {
     if (typeof item === 'string') return { did: item };
     if (item?.did) return item;
+    if (item?.handle) return item;
     if (item?.subject?.did) return item.subject;
     if (item?.actor?.did) return item.actor;
     return null;
 }
 
-function parseLocalListImport(text) {
+function extractLocalListDidsFromAny(value, result = []) {
+    if (typeof value === 'string') {
+        if (value.startsWith('did:')) result.push({ did: value });
+    } else if (Array.isArray(value)) {
+        value.forEach(item => extractLocalListDidsFromAny(item, result));
+    } else if (value && typeof value === 'object') {
+        Object.values(value).forEach(item => extractLocalListDidsFromAny(item, result));
+    }
+    return result;
+}
+
+function parseLocalListCsvLine(line) {
+    const cols = [];
+    let cur = '';
+    let quoted = false;
+    for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (quoted && ch === '"' && line[i + 1] === '"') {
+            cur += '"';
+            i += 1;
+        } else if (ch === '"') {
+            quoted = !quoted;
+        } else if (ch === ',' && !quoted) {
+            cols.push(cur);
+            cur = '';
+        } else {
+            cur += ch;
+        }
+    }
+    cols.push(cur);
+    return cols.map(col => col.trim());
+}
+
+function parseLocalListCsvImport(text) {
+    const lines = String(text || '').replace(/^\uFEFF/, '').split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+    if (!lines.length) return [];
+    if (/did|handle/i.test(lines[0])) lines.shift();
+    return lines.map(line => {
+        const cols = parseLocalListCsvLine(line);
+        return { did: cols[0] || '', handle: cols[1] || '' };
+    }).filter(item => item.did || item.handle);
+}
+
+function parseLocalListJsonImport(text) {
     const data = JSON.parse(text);
     const rawItems = Array.isArray(data)
         ? data
         : (Array.isArray(data?.members) ? data.members
             : (Array.isArray(data?.items) ? data.items
                 : (Array.isArray(data?.localList) ? data.localList : [])));
-    return normalizeLocalListMembers(rawItems.map(localListImportItem));
+    const items = rawItems.map(localListImportItem).filter(Boolean);
+    return items.length ? items : extractLocalListDidsFromAny(data);
 }
 
-function exportLocalList() {
+function parseLocalListImportEntries(text, fileName = '') {
+    const name = String(fileName || '').toLowerCase();
+    if (name.endsWith('.csv')) return parseLocalListCsvImport(text);
+    try {
+        return parseLocalListJsonImport(text);
+    } catch (jsonError) {
+        const csvItems = parseLocalListCsvImport(text);
+        if (csvItems.length) return csvItems;
+        throw jsonError;
+    }
+}
+
+async function resolveLocalListImportEntries(entries) {
+    const members = [];
+    const failed = [];
+    for (const entry of entries || []) {
+        const did = String(entry?.did || '').trim();
+        const handle = String(entry?.handle || '').trim().replace(/^@/, '');
+        if (did.startsWith('did:')) {
+            const profile = await api.getProfile(did).catch(() => null);
+            members.push(normalizeLocalListMember({
+                did,
+                handle: profile?.data?.handle || handle,
+                displayName: profile?.data?.displayName || entry.displayName || '',
+                avatar: profile?.data?.avatar || entry.avatar || ''
+            }));
+            continue;
+        }
+        if (!handle) continue;
+        try {
+            const profile = await api.getProfile(handle);
+            members.push(normalizeLocalListMember({
+                did: profile.data.did,
+                handle: profile.data.handle || handle,
+                displayName: profile.data.displayName || '',
+                avatar: profile.data.avatar || ''
+            }));
+        } catch {
+            failed.push(handle);
+        }
+    }
+    return { members: normalizeLocalListMembers(members.filter(Boolean)), failed };
+}
+
+function csvEscapeLocalList(value) {
+    const text = String(value || '');
+    return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function exportLocalList(format = 'json') {
     const members = readLocalListMembers();
-    const payload = {
-        schema: 'aerune.localList.v1',
-        exportedAt: new Date().toISOString(),
-        accountDid: currentDid || api.session?.did || null,
-        members
-    };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
     const date = new Date().toISOString().slice(0, 10);
+    let body = '';
+    let type = 'application/json';
+    let ext = 'json';
+    if (format === 'csv') {
+        body = ['did,handle', ...members.map(member => `${csvEscapeLocalList(member.did)},${csvEscapeLocalList(member.handle)}`)].join('\n') + '\n';
+        type = 'text/csv';
+        ext = 'csv';
+    } else {
+        const payload = {
+            version: 1,
+            type: 'aerune.local-list',
+            schema: 'aerune.localList.v1',
+            name: t('locallist_title'),
+            exportedAt: new Date().toISOString(),
+            accountDid: currentDid || api.session?.did || null,
+            members
+        };
+        body = JSON.stringify(payload, null, 2);
+    }
+    const blob = new Blob([body], { type });
+    const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `aerune-local-list-${date}.json`;
+    a.download = `aerune-local-list-${date}.${ext}`;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -311,11 +437,18 @@ function exportLocalList() {
 async function importLocalListFile(file) {
     if (!file) return;
     try {
-        const incoming = parseLocalListImport(await file.text());
-        if (!incoming.length) throw new Error(t('locallist_import_invalid'));
+        const entries = parseLocalListImportEntries(await file.text(), file.name);
+        if (!entries.length) throw new Error(t('locallist_import_empty'));
+        showToast(t('locallist_title'), t('locallist_import_resolving'));
+        const { members: incoming, failed } = await resolveLocalListImportEntries(entries);
+        if (!incoming.length) throw new Error(t('locallist_import_empty'));
         const byDid = new Map(readLocalListMembers().map(member => [member.did, member]));
+        let added = 0;
+        let skipped = 0;
         for (const member of incoming) {
             const existing = byDid.get(member.did) || {};
+            if (existing.did) skipped += 1;
+            else added += 1;
             byDid.set(member.did, {
                 ...existing,
                 ...member,
@@ -327,7 +460,26 @@ async function importLocalListFile(file) {
         renderFeedControls();
         for (const member of incoming) syncLocalListButtons(member.did, true);
         refreshLocalListTimelineIfActive();
-        showToast(t('locallist_title'), t('locallist_imported', String(incoming.length)));
+        showToast(t('locallist_title'), t('locallist_import_result', String(added), String(skipped), String(failed.length)));
+    } catch (e) {
+        alert(`${t('locallist_import_failed')}\n${e.message || e}`);
+    }
+}
+
+async function addLocalListMemberFromInput() {
+    const input = document.getElementById('settings-local-list-add-input');
+    const query = input?.value.trim().replace(/^@/, '');
+    if (!query) return;
+    try {
+        const profile = await api.getProfile(query);
+        const added = addLocalListMember({
+            did: profile.data.did,
+            handle: profile.data.handle,
+            displayName: profile.data.displayName || '',
+            avatar: profile.data.avatar || ''
+        });
+        if (input) input.value = '';
+        showToast(t('locallist_title'), added ? t('locallist_added') : t('locallist_already_exists'));
     } catch (e) {
         alert(`${t('locallist_import_failed')}\n${e.message || e}`);
     }
@@ -2612,9 +2764,19 @@ function installDelegates() {
                 removeLocalListMember(actEl.dataset.did);
                 return;
             }
+            case 'local-list-move': {
+                e.preventDefault(); e.stopPropagation();
+                moveLocalListMember(actEl.dataset.did, parseInt(actEl.dataset.dir, 10));
+                return;
+            }
+            case 'local-list-add-input': {
+                e.preventDefault(); e.stopPropagation();
+                addLocalListMemberFromInput();
+                return;
+            }
             case 'local-list-export': {
                 e.preventDefault(); e.stopPropagation();
-                exportLocalList();
+                exportLocalList(actEl.dataset.format || 'json');
                 return;
             }
             case 'local-list-import': {
@@ -3302,7 +3464,7 @@ function renderLocalListSettings() {
         container.innerHTML = `<div class="settings-empty">${escHTML(t('locallist_empty'))}</div>`;
         return;
     }
-    container.innerHTML = members.map(member => {
+    container.innerHTML = members.map((member, index) => {
         const title = member.displayName || member.handle || member.did;
         const handle = member.handle ? `@${member.handle}` : member.did;
         const addedAt = member.addedAt ? new Date(member.addedAt).toLocaleString(currentLang) : '';
@@ -3314,6 +3476,8 @@ function renderLocalListSettings() {
             `${addedAt ? `<small>${escHTML(t('locallist_added_at', addedAt))}</small>` : ''}` +
             `</div>` +
             `<div class="settings-account-actions">` +
+            `<button type="button" data-act="local-list-move" data-did="${escAttr(member.did)}" data-dir="-1" ${index === 0 ? 'disabled' : ''}>${escHTML(t('feeds_move_up'))}</button>` +
+            `<button type="button" data-act="local-list-move" data-did="${escAttr(member.did)}" data-dir="1" ${index === members.length - 1 ? 'disabled' : ''}>${escHTML(t('feeds_move_down'))}</button>` +
             `<button type="button" data-act="profile" data-actor="${escAttr(member.did)}">${escHTML(t('locallist_open_profile'))}</button>` +
             `<button type="button" class="danger-action" data-act="local-list-remove" data-did="${escAttr(member.did)}">${escHTML(t('locallist_remove'))}</button>` +
             `</div>` +
@@ -4005,11 +4169,16 @@ async function initApp() {
             `<span data-i18n="locallist_title">${t('locallist_title')}</span>` +
             `<span id="settings-local-list-count" class="settings-panel-count"></span>` +
             `</div>` +
+            `<div class="settings-local-list-add">` +
+            `<input id="settings-local-list-add-input" type="text" data-i18n-placeholder="locallist_search_placeholder" placeholder="${escAttr(t('locallist_search_placeholder'))}">` +
+            `<button type="button" data-act="local-list-add-input" data-i18n="locallist_add">${t('locallist_add')}</button>` +
+            `</div>` +
             `<div class="settings-local-list-toolbar">` +
             `<button type="button" data-act="feed-select-local-list" data-i18n="locallist_open_timeline">${t('locallist_open_timeline')}</button>` +
-            `<button type="button" data-act="local-list-export" data-i18n="locallist_export">${t('locallist_export')}</button>` +
+            `<button type="button" data-act="local-list-export" data-format="json" data-i18n="locallist_export_json">${t('locallist_export_json')}</button>` +
+            `<button type="button" data-act="local-list-export" data-format="csv" data-i18n="locallist_export_csv">${t('locallist_export_csv')}</button>` +
             `<button type="button" data-act="local-list-import" data-i18n="locallist_import">${t('locallist_import')}</button>` +
-            `<input type="file" id="local-list-import-input" accept="application/json,.json" class="hidden">` +
+            `<input type="file" id="local-list-import-input" accept="application/json,text/csv,.json,.csv" class="hidden">` +
             `</div>` +
             `<div id="settings-local-list-list" class="settings-local-list"></div>`;
         const moderationHeading = els.settingsView.querySelector('[data-i18n="settings_moderation"]');
@@ -4189,6 +4358,12 @@ async function initApp() {
     get('local-list-import-input')?.addEventListener('change', async e => {
         await importLocalListFile(e.target.files?.[0]);
         e.target.value = '';
+    });
+    get('settings-local-list-add-input')?.addEventListener('keydown', e => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            addLocalListMemberFromInput();
+        }
     });
     get('setting-lang')?.addEventListener('change', e => {
         const nextLang = normalizeLanguage(e.target.value || currentLang);

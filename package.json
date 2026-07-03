@@ -1,7 +1,7 @@
 {
   "name": "aerune",
   "productName": "Aerune",
-  "version": "2.5.4",
+  "version": "2.5.5",
   "description": "Bluesky Client Aerune",
   "main": "main.js",
   "author": "garu neko",

@@ -982,6 +982,19 @@ body[data-font-size="2"] .msg-bubble { font-size: 20px; }
     gap: 8px;
     margin-bottom: 12px;
 }
+.settings-local-list-add {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+.settings-local-list-add input {
+    flex: 1;
+    min-width: 180px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 8px 10px;
+}
+.settings-local-list-add button,
 .settings-local-list-toolbar button {
     border: 1px solid var(--border-color);
     background: #fff;
@@ -1087,16 +1100,19 @@ body[data-font-size="2"] .msg-bubble { font-size: 20px; }
     .settings-field,
     .settings-account-row,
     .settings-local-list-row,
+    .settings-local-list-add,
     .discovery-actions {
         align-items: stretch;
         flex-direction: column;
     }
     .settings-field select,
     .settings-account-actions,
+    .settings-local-list-add input,
     .settings-local-list-toolbar {
         width: 100%;
     }
     .settings-local-list-toolbar button,
+    .settings-local-list-add button,
     .settings-account-actions button,
     .discovery-actions button {
         flex: 1;
@@ -1179,6 +1195,7 @@ body.rtl .settings-check,
 body.rtl .settings-account-row,
 body.rtl .settings-account-actions,
 body.rtl .settings-local-list-title,
+body.rtl .settings-local-list-add,
 body.rtl .settings-local-list-toolbar,
 body.rtl .settings-local-list-row,
 body.rtl .settings-local-list-main,
