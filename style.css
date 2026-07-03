@@ -700,6 +700,109 @@ body[data-font-size="2"] .msg-bubble { font-size: 20px; }
     white-space: nowrap;
 }
 
+/* みつける */
+#discovery-view { padding: 0 0 90px; overflow-y: auto; }
+.discovery-panel { max-width: 860px; margin: 0 auto; padding: 20px; }
+.discovery-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+.discovery-header h3 { margin: 0; font-size: 22px; }
+.discovery-header button,
+.discovery-actions button {
+    border: 1px solid var(--border-color);
+    background: #fff;
+    border-radius: 8px;
+    padding: 7px 10px;
+    cursor: pointer;
+    font-weight: 800;
+}
+.discovery-header button:disabled,
+.discovery-actions button:disabled {
+    cursor: default;
+    opacity: .65;
+}
+.discovery-card-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.discovery-card {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 12px;
+    background: #fff;
+}
+.discovery-profile {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    cursor: pointer;
+}
+.discovery-avatar {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: #e2e8f0;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+.discovery-main { min-width: 0; flex: 1; }
+.discovery-name { font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.discovery-handle { color: var(--text-sub); font-size: 13px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.discovery-desc {
+    color: var(--text-sub);
+    font-size: 13px;
+    line-height: 1.35;
+    margin-top: 6px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.discovery-reason {
+    margin-top: 10px;
+    color: #0369a1;
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1.35;
+}
+.discovery-preview {
+    margin-top: 10px;
+    padding: 10px;
+    border-radius: 8px;
+    background: #f1f5f9;
+    color: var(--text-main);
+    font-size: 14px;
+    line-height: 1.45;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    word-break: break-word;
+}
+.discovery-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+}
+.discovery-actions button:first-child {
+    flex: 1;
+    border-color: var(--bsky-blue);
+    background: var(--bsky-blue);
+    color: #fff;
+}
+.discovery-actions button:last-child { flex: 1; }
+.discovery-status {
+    padding: 28px 20px;
+    text-align: center;
+    color: var(--text-sub);
+}
+.discovery-error { color: #d93025; }
+
 /* 通知 */
 .notif { cursor: pointer; }
 .notif-unread { box-shadow: inset 4px 0 0 var(--bsky-blue); background: #f8fbff; }
@@ -983,7 +1086,8 @@ body[data-font-size="2"] .msg-bubble { font-size: 20px; }
 @media (max-width: 700px) {
     .settings-field,
     .settings-account-row,
-    .settings-local-list-row {
+    .settings-local-list-row,
+    .discovery-actions {
         align-items: stretch;
         flex-direction: column;
     }
@@ -993,7 +1097,8 @@ body[data-font-size="2"] .msg-bubble { font-size: 20px; }
         width: 100%;
     }
     .settings-local-list-toolbar button,
-    .settings-account-actions button {
+    .settings-account-actions button,
+    .discovery-actions button {
         flex: 1;
     }
 }
@@ -1083,6 +1188,9 @@ body.rtl .mod-sub-form,
 body.rtl .mod-sub-actions,
 body.rtl .mod-list-row,
 body.rtl .mod-rule-row,
+body.rtl .discovery-header,
+body.rtl .discovery-profile,
+body.rtl .discovery-actions,
 body.rtl .feed-source-controls,
 body.rtl .feed-card-actions,
 body.rtl .chat-header,
@@ -1156,6 +1264,7 @@ body.rtl .notif-avatar:first-child {
 body.rtl .external-card,
 body.rtl .embedded-quote,
 body.rtl .feed-row,
+body.rtl .discovery-card,
 body.rtl .feed-card,
 body.rtl .settings-panel,
 body.rtl .moderation-panel,

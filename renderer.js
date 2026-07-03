@@ -62,6 +62,17 @@ const feedState = {
     errorMessage: ''
 };
 
+const discoveryState = {
+    configuredDid: null,
+    candidates: [],
+    isLoading: false,
+    errorMessage: '',
+    followingDid: null,
+    followingDids: new Set(),
+    dismissedDids: new Set(),
+    requestId: 0
+};
+
 // ─── 設定 ─────────────────────────────────────────────────────────
 const RTL_LANGS = new Set(['ar']);
 const normalizeLanguage = (lang = '') => {
@@ -152,6 +163,8 @@ const timelineSourceKey = () => feedState.selectedLocalList ? 'local-list' : (fe
 const localListKey = () => accountKey('aerune_local_list_members');
 const notificationUnreadKey = () => accountKey('aerune_notif_unread_count');
 const recentNotificationIdsKey = () => accountKey('aerune_recent_notification_ids');
+const discoveryDismissedKey = () => accountKey('aerune_discovery_dismissed');
+const discoveryCacheKey = () => accountKey('aerune_discovery_candidates');
 
 function normalizeLocalListMember(member) {
     if (!member || typeof member !== 'object' || !member.did) return null;
@@ -1354,6 +1367,7 @@ function renderFeedControls() {
         `<span class="feed-source-label">${escHTML(t('feeds_source'))}</span>` +
         `<button class="feed-chip${!selectedValue ? ' active' : ''}" data-act="feed-select-home">${escHTML(t('timeline_home'))}</button>` +
         `<button class="feed-chip${selectedValue === LOCAL_LIST_SOURCE_VALUE ? ' active' : ''}" data-act="feed-select-local-list">${escHTML(t('locallist_title'))}</button>` +
+        `<button class="feed-chip" data-act="feed-open-discovery">${escHTML(t('nav_discovery'))}</button>` +
         `<div class="feed-chip-row">${chips}</div>` +
         `<select id="feed-source-select" class="feed-source-select">${options}</select>` +
         `</div>` +
@@ -1436,6 +1450,548 @@ window.openFeedsManager = () => {
     renderFeedsView();
 };
 
+// ─── みつける ────────────────────────────────────────────────────
+function discoveryProfileFromActor(actor) {
+    if (!actor?.did) return null;
+    const viewer = actor.viewer || {};
+    return {
+        did: String(actor.did),
+        handle: String(actor.handle || ''),
+        displayName: String(actor.displayName || ''),
+        avatar: String(actor.avatar || ''),
+        description: String(actor.description || ''),
+        viewer: {
+            following: viewer.following || '',
+            followedBy: viewer.followedBy || '',
+            muted: viewer.muted === true,
+            blocking: viewer.blocking || ''
+        }
+    };
+}
+
+function discoveryTitle(actor) {
+    const name = String(actor?.displayName || '').trim();
+    return name || actor?.handle || actor?.did || '';
+}
+
+function uniqueDiscoveryProfiles(profiles, limit = Number.POSITIVE_INFINITY) {
+    const seen = new Set();
+    const result = [];
+    for (const profile of profiles || []) {
+        const item = discoveryProfileFromActor(profile);
+        if (!item || seen.has(item.did)) continue;
+        seen.add(item.did);
+        result.push(item);
+        if (result.length >= limit) break;
+    }
+    return result;
+}
+
+function shuffleDiscoveryProfiles(values) {
+    const arr = [...(values || [])];
+    for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+}
+
+function readDiscoveryDismissed() {
+    try {
+        const raw = localStorage.getItem(discoveryDismissedKey());
+        const list = raw ? JSON.parse(raw) : [];
+        return new Set(Array.isArray(list) ? list.filter(Boolean).map(String) : []);
+    } catch {
+        return new Set();
+    }
+}
+
+function saveDiscoveryDismissed() {
+    try {
+        localStorage.setItem(discoveryDismissedKey(), JSON.stringify([...discoveryState.dismissedDids]));
+    } catch {}
+}
+
+function normalizeDiscoveryReason(reason) {
+    const kind = reason?.kind;
+    if (kind === 'distant') return { kind };
+    if (kind === 'followSeed' || kind === 'likedSeed') {
+        return { kind, name: String(reason.name || '') };
+    }
+    return null;
+}
+
+function normalizeDiscoveryCandidate(candidate) {
+    const actor = discoveryProfileFromActor(candidate?.actor);
+    if (!actor) return null;
+    const reasons = (Array.isArray(candidate.reasons) ? candidate.reasons : [])
+        .map(normalizeDiscoveryReason)
+        .filter(Boolean);
+    return {
+        actor,
+        reasons,
+        order: Number.isFinite(Number(candidate.order)) ? Number(candidate.order) : 0,
+        preview: null
+    };
+}
+
+function loadCachedDiscoveryCandidates() {
+    try {
+        const raw = localStorage.getItem(discoveryCacheKey());
+        const list = raw ? JSON.parse(raw) : [];
+        return (Array.isArray(list) ? list : [])
+            .map(normalizeDiscoveryCandidate)
+            .filter(candidate => candidate && !discoveryState.dismissedDids.has(candidate.actor.did));
+    } catch {
+        return [];
+    }
+}
+
+function saveDiscoveryCandidates() {
+    try {
+        const payload = discoveryState.candidates.slice(0, 40).map(candidate => ({
+            actor: candidate.actor,
+            reasons: candidate.reasons,
+            order: candidate.order
+        }));
+        localStorage.setItem(discoveryCacheKey(), JSON.stringify(payload));
+    } catch {}
+}
+
+function clearCachedDiscoveryCandidates() {
+    try { localStorage.removeItem(discoveryCacheKey()); } catch {}
+}
+
+function configureDiscoveryForCurrentAccount() {
+    const did = currentDid || api.session?.did || null;
+    if (discoveryState.configuredDid === did) return;
+    discoveryState.configuredDid = did;
+    discoveryState.dismissedDids = readDiscoveryDismissed();
+    discoveryState.followingDids = new Set();
+    discoveryState.candidates = did ? loadCachedDiscoveryCandidates() : [];
+    discoveryState.errorMessage = '';
+    discoveryState.followingDid = null;
+}
+
+function isDiscoveryEligible(actor) {
+    const did = actor?.did;
+    if (!did || did === api.session?.did) return false;
+    if (discoveryState.dismissedDids.has(did)) return false;
+    if (discoveryState.followingDids.has(did)) return false;
+    const viewer = actor.viewer || {};
+    if (viewer.following || viewer.muted === true || viewer.blocking) return false;
+    return true;
+}
+
+async function fetchDiscoveryFollows(limit = 400) {
+    const actor = api.session?.did;
+    if (!actor) return [];
+    const result = [];
+    let cursor;
+    while (result.length < limit) {
+        const res = await api.getFollows(actor, Math.min(100, limit - result.length), cursor);
+        result.push(...uniqueDiscoveryProfiles(res.data.follows || []));
+        const next = String(res.data.cursor || '').trim();
+        if (!next) break;
+        cursor = next;
+    }
+    return result.slice(0, limit);
+}
+
+async function fetchDiscoveryLikedSeeds(actor, limit = 30, maxSeeds = 5) {
+    const res = await api.getActorLikes(actor, limit);
+    const seen = new Set();
+    const result = [];
+    for (const item of res.data.feed || []) {
+        const profile = discoveryProfileFromActor(item.post?.author);
+        if (!profile || profile.did === api.session?.did || seen.has(profile.did)) continue;
+        seen.add(profile.did);
+        result.push(profile);
+        if (result.length >= maxSeeds) break;
+    }
+    return result;
+}
+
+async function fetchDiscoveryAuthorInteractionSeeds(actor, limit = 50, maxSeeds = 8) {
+    const res = await api.getAuthorFeed(actor, limit, undefined, 'posts_with_replies');
+    const seen = new Set();
+    const result = [];
+    const append = author => {
+        const profile = discoveryProfileFromActor(author);
+        if (!profile || profile.did === api.session?.did || profile.did === actor || seen.has(profile.did)) return;
+        seen.add(profile.did);
+        result.push(profile);
+    };
+
+    for (const item of res.data.feed || []) {
+        const reasonType = item.reason?.$type || item.reason?.type || '';
+        if (String(reasonType).endsWith('#reasonRepost')) append(item.post?.author);
+        append(item.reply?.parent?.author);
+        append(item.reply?.root?.author);
+        if (result.length >= maxSeeds) break;
+    }
+    return result.slice(0, maxSeeds);
+}
+
+async function fetchDiscoverySuggestions(actor) {
+    const res = await api.getSuggestedFollowsByActor(actor);
+    return uniqueDiscoveryProfiles(res.data.suggestions || []);
+}
+
+async function fetchDiscoverySuggestionBatches(seeds) {
+    const batches = await Promise.all((seeds || []).map(async (seed, index) => {
+        try {
+            const suggestions = (await fetchDiscoverySuggestions(seed.did)).filter(isDiscoveryEligible);
+            return { index, seed, suggestions };
+        } catch (e) {
+            console.warn('fetchDiscoverySuggestionBatches:', seed.did, e);
+            return { index, seed, suggestions: [] };
+        }
+    }));
+    return batches.sort((a, b) => a.index - b.index);
+}
+
+function selectDiscoveryNetworkSeeds(follows, directInteractionSeeds, limit = 6) {
+    const interacted = new Set((directInteractionSeeds || []).map(profile => profile.did));
+    return [...(follows || [])]
+        .map((profile, index) => ({ profile, index, interacted: interacted.has(profile.did) }))
+        .sort((a, b) => (a.interacted === b.interacted ? a.index - b.index : (a.interacted ? -1 : 1)))
+        .slice(0, limit)
+        .map(item => item.profile);
+}
+
+async function fetchDiscoveryInteractionTargets(seed) {
+    const targets = [];
+    try {
+        targets.push(...await fetchDiscoveryLikedSeeds(seed.did, 20, 8));
+    } catch (e) {
+        console.warn('fetchDiscoveryInteractionTargets likes:', seed.did, e);
+    }
+    try {
+        targets.push(...await fetchDiscoveryAuthorInteractionSeeds(seed.did, 30, 8));
+    } catch (e) {
+        console.warn('fetchDiscoveryInteractionTargets author:', seed.did, e);
+    }
+    return targets;
+}
+
+async function fetchDiscoveryNetworkCandidates(seeds) {
+    const batches = await Promise.all((seeds || []).map(async (seed, seedIndex) => ({
+        seed,
+        seedIndex,
+        targets: await fetchDiscoveryInteractionTargets(seed)
+    })));
+    const aggregates = new Map();
+
+    for (const batch of batches) {
+        const seenInSeed = new Set();
+        for (const target of batch.targets) {
+            if (!target?.did || seenInSeed.has(target.did) || !isDiscoveryEligible(target)) continue;
+            seenInSeed.add(target.did);
+            const existing = aggregates.get(target.did);
+            if (existing) {
+                existing.hitCount += 1;
+                existing.firstSeedIndex = Math.min(existing.firstSeedIndex, batch.seedIndex);
+                if (!existing.seedDids.has(batch.seed.did)) {
+                    existing.seedDids.add(batch.seed.did);
+                    existing.seedNames.push(discoveryTitle(batch.seed));
+                }
+            } else {
+                aggregates.set(target.did, {
+                    actor: target,
+                    seedNames: [discoveryTitle(batch.seed)],
+                    seedDids: new Set([batch.seed.did]),
+                    hitCount: 1,
+                    firstSeedIndex: batch.seedIndex
+                });
+            }
+        }
+    }
+
+    return [...aggregates.values()].sort((a, b) => {
+        const aWeight = Math.min(2 ** Math.min(Math.max(0, a.seedDids.size - 1), 2), 4);
+        const bWeight = Math.min(2 ** Math.min(Math.max(0, b.seedDids.size - 1), 2), 4);
+        if (aWeight !== bWeight) return bWeight - aWeight;
+        if (a.hitCount !== b.hitCount) return b.hitCount - a.hitCount;
+        return a.firstSeedIndex - b.firstSeedIndex;
+    });
+}
+
+async function fetchOptionalDiscoverySuggestionPool(seeds) {
+    const batches = await Promise.all((seeds || []).map(async seed => {
+        try {
+            return (await fetchDiscoverySuggestions(seed.did)).filter(isDiscoveryEligible);
+        } catch (e) {
+            console.warn('fetchOptionalDiscoverySuggestionPool:', seed.did, e);
+            return [];
+        }
+    }));
+    return batches.flat();
+}
+
+async function fetchDistantDiscoveryCandidates(firstHopSuggestions, fallbackSeeds) {
+    const twoHopSeeds = uniqueDiscoveryProfiles(shuffleDiscoveryProfiles(firstHopSuggestions), 6);
+    let pool = await fetchOptionalDiscoverySuggestionPool(twoHopSeeds);
+    if (pool.length < 12) {
+        const extraSeeds = uniqueDiscoveryProfiles(shuffleDiscoveryProfiles(fallbackSeeds), 4);
+        pool = pool.concat(await fetchOptionalDiscoverySuggestionPool(extraSeeds));
+    }
+    return uniqueDiscoveryProfiles(shuffleDiscoveryProfiles(pool));
+}
+
+function sameDiscoveryReason(a, b) {
+    return a?.kind === b?.kind && String(a?.name || '') === String(b?.name || '');
+}
+
+function insertDiscoveryCandidate(actor, reason, byDid, orderRef) {
+    const profile = discoveryProfileFromActor(actor);
+    if (!profile || !isDiscoveryEligible(profile)) return;
+    const existing = byDid.get(profile.did);
+    if (existing) {
+        if (!existing.reasons.some(item => sameDiscoveryReason(item, reason))) {
+            existing.reasons.push(reason);
+        }
+        return;
+    }
+    byDid.set(profile.did, {
+        actor: profile,
+        reasons: [reason],
+        order: orderRef.value++,
+        preview: null
+    });
+}
+
+function isPrimaryDistantDiscoveryCandidate(candidate) {
+    return candidate.reasons?.[0]?.kind === 'distant';
+}
+
+function mixDistantDiscoveryCandidates(values) {
+    const normal = [...values].filter(candidate => !isPrimaryDistantDiscoveryCandidate(candidate)).sort((a, b) => a.order - b.order);
+    const distant = [...values].filter(isPrimaryDistantDiscoveryCandidate).sort((a, b) => a.order - b.order);
+    const mixed = [];
+    let index = 0;
+    while (normal.length) {
+        mixed.push(normal.shift());
+        index += 1;
+        if (index % 4 === 0 && distant.length) mixed.push(distant.shift());
+    }
+    mixed.push(...distant);
+    return mixed.slice(0, 40);
+}
+
+async function attachDiscoveryPreviews(candidates) {
+    const previews = await Promise.all(candidates.slice(0, 12).map(async (candidate, index) => {
+        try {
+            const res = await api.getAuthorFeed(candidate.actor.did, 1);
+            return { index, preview: res.data.feed?.[0]?.post || null };
+        } catch {
+            return { index, preview: null };
+        }
+    }));
+    for (const item of previews) {
+        if (item.preview) candidates[item.index].preview = item.preview;
+    }
+}
+
+async function refreshDiscovery({ clear = false } = {}) {
+    if (!api.session?.did) return;
+    configureDiscoveryForCurrentAccount();
+    const requestId = ++discoveryState.requestId;
+    if (clear) {
+        discoveryState.candidates = [];
+        clearCachedDiscoveryCandidates();
+    }
+    discoveryState.isLoading = true;
+    discoveryState.errorMessage = '';
+    renderDiscoveryView();
+
+    try {
+        const follows = await fetchDiscoveryFollows(400);
+        if (requestId !== discoveryState.requestId) return;
+        discoveryState.followingDids = new Set(follows.map(profile => profile.did));
+
+        const likedSeeds = await fetchDiscoveryLikedSeeds(api.session.did, 30, 5).catch(e => {
+            console.warn('fetchDiscoveryLikedSeeds:', e);
+            return [];
+        });
+        const directAuthorSeeds = await fetchDiscoveryAuthorInteractionSeeds(api.session.did, 50, 8).catch(e => {
+            console.warn('fetchDiscoveryAuthorInteractionSeeds:', e);
+            return [];
+        });
+        const directInteractionSeeds = uniqueDiscoveryProfiles(directAuthorSeeds.concat(likedSeeds), 10);
+        const engagementSeeds = uniqueDiscoveryProfiles(directInteractionSeeds.concat(follows.slice(0, 6)), 8);
+
+        const byDid = new Map();
+        const orderRef = { value: 0 };
+        const firstHopSuggestions = [];
+
+        const engagementBatches = await fetchDiscoverySuggestionBatches(engagementSeeds.slice(0, 5));
+        for (const batch of engagementBatches) {
+            for (const actor of batch.suggestions.slice(0, batch.index < 2 ? 7 : 5)) {
+                insertDiscoveryCandidate(actor, { kind: 'followSeed', name: discoveryTitle(batch.seed) }, byDid, orderRef);
+            }
+            firstHopSuggestions.push(...batch.suggestions);
+        }
+
+        const likedBatches = await fetchDiscoverySuggestionBatches(likedSeeds.slice(0, 4));
+        for (const batch of likedBatches) {
+            for (const actor of batch.suggestions.slice(0, 5)) {
+                insertDiscoveryCandidate(actor, { kind: 'likedSeed', name: discoveryTitle(batch.seed) }, byDid, orderRef);
+            }
+            firstHopSuggestions.push(...batch.suggestions);
+        }
+
+        const axisOneDirectCount = [...byDid.values()].filter(candidate =>
+            candidate.reasons.some(reason => reason.kind === 'followSeed')
+        ).length;
+        const networkCap = axisOneDirectCount === 0 ? 0 : Math.min(8, Math.max(1, Math.ceil(axisOneDirectCount * 0.35)));
+        const networkSeeds = selectDiscoveryNetworkSeeds(follows, directInteractionSeeds, 6);
+        const networkCandidates = await fetchDiscoveryNetworkCandidates(networkSeeds);
+        let networkInsertions = 0;
+        for (const aggregate of networkCandidates) {
+            if (networkInsertions >= networkCap) break;
+            const isNewCandidate = !byDid.has(aggregate.actor.did);
+            insertDiscoveryCandidate(aggregate.actor, { kind: 'followSeed', name: aggregate.seedNames[0] || discoveryTitle(aggregate.actor) }, byDid, orderRef);
+            if (isNewCandidate && byDid.has(aggregate.actor.did)) networkInsertions += 1;
+        }
+
+        const distantTarget = Math.max(3, Math.min(8, Math.max(1, Math.floor(byDid.size / 4))));
+        const distantPool = await fetchDistantDiscoveryCandidates(firstHopSuggestions, engagementSeeds.concat(likedSeeds));
+        let distantCount = 0;
+        for (const actor of shuffleDiscoveryProfiles(distantPool)) {
+            if (distantCount >= distantTarget) break;
+            if (byDid.has(actor.did) || !isDiscoveryEligible(actor)) continue;
+            insertDiscoveryCandidate(actor, { kind: 'distant' }, byDid, orderRef);
+            if (byDid.has(actor.did)) distantCount += 1;
+        }
+
+        let result = mixDistantDiscoveryCandidates([...byDid.values()])
+            .filter(candidate => !discoveryState.dismissedDids.has(candidate.actor.did));
+        await attachDiscoveryPreviews(result);
+        if (requestId !== discoveryState.requestId) return;
+        discoveryState.candidates = result;
+        saveDiscoveryCandidates();
+    } catch (e) {
+        if (requestId !== discoveryState.requestId) return;
+        discoveryState.errorMessage = e.message || String(e);
+    } finally {
+        if (requestId === discoveryState.requestId) {
+            discoveryState.isLoading = false;
+            renderDiscoveryView();
+        }
+    }
+}
+
+function discoveryReasonText(candidate) {
+    const reasons = candidate.reasons || [];
+    const first = reasons[0];
+    if (!first) return '';
+    let primary = '';
+    if (first.kind === 'followSeed') primary = t('discovery_reason_follow', first.name || '');
+    else if (first.kind === 'likedSeed') primary = t('discovery_reason_like', first.name || '');
+    else if (first.kind === 'distant') primary = t('discovery_reason_distant');
+    const extra = reasons.length - 1;
+    return extra > 0 ? `${primary} ${t('discovery_reason_more', String(extra))}` : primary;
+}
+
+function discoveryPreviewHtml(preview) {
+    const record = preview?.record || preview?.value || {};
+    const text = String(record.text || '').trim();
+    if (!text) return '';
+    return `<div class="discovery-preview">${renderRichText({ text, facets: record.facets })}</div>`;
+}
+
+function discoveryCard(candidate) {
+    const actor = candidate.actor;
+    const title = discoveryTitle(actor);
+    const handle = actor.handle ? `@${actor.handle}` : actor.did;
+    const desc = actor.description ? `<div class="discovery-desc">${renderRichText({ text: actor.description })}</div>` : '';
+    const reason = discoveryReasonText(candidate);
+    const followLabel = discoveryState.followingDid === actor.did ? t('discovery_loading') : t('ctx_follow');
+    return `<article class="discovery-card">` +
+        `<div class="discovery-profile" data-act="profile" data-actor="${escAttr(actor.did)}">` +
+        `<img class="discovery-avatar" src="${escAttr(actor.avatar || '')}" alt="" loading="lazy" decoding="async">` +
+        `<div class="discovery-main">` +
+        `<div class="discovery-name">${escHTML(title)}</div>` +
+        `<div class="discovery-handle">${escHTML(handle)}</div>` +
+        desc +
+        `</div>` +
+        `</div>` +
+        `${reason ? `<div class="discovery-reason">${escHTML(reason)}</div>` : ''}` +
+        discoveryPreviewHtml(candidate.preview) +
+        `<div class="discovery-actions">` +
+        `<button type="button" data-act="discovery-follow" data-did="${escAttr(actor.did)}" ${discoveryState.followingDid === actor.did ? 'disabled' : ''}>${escHTML(followLabel)}</button>` +
+        `<button type="button" class="danger-action" data-act="discovery-dismiss" data-did="${escAttr(actor.did)}">${escHTML(t('discovery_not_interested'))}</button>` +
+        `</div>` +
+        `</article>`;
+}
+
+function renderDiscoveryView() {
+    if (!els.discoveryView) return;
+    configureDiscoveryForCurrentAccount();
+    const status = discoveryState.isLoading && !discoveryState.candidates.length
+        ? `<div class="discovery-status">${escHTML(t('discovery_loading'))}</div>`
+        : '';
+    const empty = !discoveryState.isLoading && !discoveryState.candidates.length
+        ? `<div class="discovery-status">${escHTML(t('discovery_empty'))}</div>`
+        : '';
+    const error = discoveryState.errorMessage
+        ? `<div class="discovery-status discovery-error">${escHTML(t('discovery_failed'))}<br>${escHTML(discoveryState.errorMessage)}</div>`
+        : '';
+    const cards = discoveryState.candidates.length
+        ? `<div class="discovery-card-list">${discoveryState.candidates.map(discoveryCard).join('')}</div>`
+        : '';
+    els.discoveryView.innerHTML =
+        `<div class="discovery-panel">` +
+        `<div class="discovery-header">` +
+        `<h3>${escHTML(t('nav_discovery'))}</h3>` +
+        `<button type="button" data-act="discovery-refresh" ${discoveryState.isLoading ? 'disabled' : ''}>${escHTML(t('feeds_refresh'))}</button>` +
+        `</div>` +
+        error +
+        status +
+        cards +
+        empty +
+        `${discoveryState.isLoading && discoveryState.candidates.length ? `<div class="discovery-status">${escHTML(t('discovery_loading'))}</div>` : ''}` +
+        `</div>`;
+}
+
+async function followDiscoveryCandidate(did) {
+    const candidate = discoveryState.candidates.find(item => item.actor.did === did);
+    if (!candidate || discoveryState.followingDid) return;
+    discoveryState.followingDid = did;
+    renderDiscoveryView();
+    try {
+        await api.follow(did);
+        discoveryState.followingDids.add(did);
+        discoveryState.candidates = discoveryState.candidates.filter(item => item.actor.did !== did);
+        saveDiscoveryCandidates();
+        showToast(t('discovery_followed'), discoveryTitle(candidate.actor));
+    } catch (e) {
+        alert(e.message || e);
+    } finally {
+        discoveryState.followingDid = null;
+        renderDiscoveryView();
+    }
+}
+
+function dismissDiscoveryCandidate(did) {
+    if (!did) return;
+    discoveryState.dismissedDids.add(did);
+    saveDiscoveryDismissed();
+    discoveryState.candidates = discoveryState.candidates.filter(candidate => candidate.actor.did !== did);
+    saveDiscoveryCandidates();
+    renderDiscoveryView();
+}
+
+window.openDiscovery = () => {
+    configureDiscoveryForCurrentAccount();
+    nav.push({ type: 'discovery' }, _activeView);
+    updateBackBtn();
+    switchView('discovery', els.discoveryView);
+    renderDiscoveryView();
+    if (!discoveryState.candidates.length && !discoveryState.isLoading) refreshDiscovery();
+};
+
 // ─── ナビゲーション ───────────────────────────────────────────────
 function updateBackBtn() {
     const b = document.getElementById('back-btn');
@@ -1487,6 +2043,11 @@ function goBack() {
         case 'feeds':
             switchView('feeds', els.feedsView);
             renderFeedsView();
+            break;
+        case 'discovery':
+            switchView('discovery', els.discoveryView);
+            renderDiscoveryView();
+            restoreScroll(els.discoveryView);
             break;
     }
 }
@@ -1961,6 +2522,11 @@ function installDelegates() {
                 selectTimelineFeed(LOCAL_LIST_SOURCE_VALUE);
                 return;
             }
+            case 'feed-open-discovery': {
+                e.preventDefault(); e.stopPropagation();
+                window.openDiscovery();
+                return;
+            }
             case 'feed-select': {
                 e.preventDefault(); e.stopPropagation();
                 selectTimelineFeed(actEl.dataset.uri || '');
@@ -1994,6 +2560,21 @@ function installDelegates() {
             case 'feed-search': {
                 e.preventDefault(); e.stopPropagation();
                 runFeedSearch();
+                return;
+            }
+            case 'discovery-refresh': {
+                e.preventDefault(); e.stopPropagation();
+                refreshDiscovery({ clear: true });
+                return;
+            }
+            case 'discovery-follow': {
+                e.preventDefault(); e.stopPropagation();
+                followDiscoveryCandidate(actEl.dataset.did);
+                return;
+            }
+            case 'discovery-dismiss': {
+                e.preventDefault(); e.stopPropagation();
+                dismissDiscoveryCandidate(actEl.dataset.did);
                 return;
             }
             case 'search-mode': {
@@ -2377,7 +2958,7 @@ function installDelegates() {
 
 // ─── ビュー切り替え ───────────────────────────────────────────────
 let _activeView = null;
-const ALL_VIEWS = () => [els.timelineDiv, els.feedsView, els.notifDiv, els.chatView, els.searchView, els.profileView, els.threadView, els.settingsView, els.bookmarksView];
+const ALL_VIEWS = () => [els.timelineDiv, els.feedsView, els.discoveryView, els.notifDiv, els.chatView, els.searchView, els.profileView, els.threadView, els.settingsView, els.bookmarksView];
 
 function switchView(viewId, activeDiv) {
     if (!els.viewTitle) return;
@@ -2400,7 +2981,7 @@ function switchView(viewId, activeDiv) {
     }
     renderTimelineNotice();
     if (els.dropZone) {
-        els.dropZone.style.display = ['chat', 'settings', 'bookmarks', 'feeds'].includes(viewId) ? 'none' : '';
+        els.dropZone.style.display = ['chat', 'settings', 'bookmarks', 'feeds', 'discovery'].includes(viewId) ? 'none' : '';
     }
 }
 
@@ -2427,6 +3008,7 @@ function refreshLocalizedDynamicUi() {
     renderTimelineNotice();
     renderFeedControls();
     if (els.feedsView && !els.feedsView.classList.contains('hidden')) renderFeedsView();
+    if (els.discoveryView && !els.discoveryView.classList.contains('hidden')) renderDiscoveryView();
     renderMuteRulesList();
     renderSettingsAccounts();
     renderLocalListSettings();
@@ -3239,6 +3821,7 @@ async function initApp() {
         timelineSourceBar:      get('timeline-source-bar'),
         timelineNotice:         get('timeline-notice'),
         feedsView:              get('feeds-view'),
+        discoveryView:          get('discovery-view'),
         notifDiv:              get('notifications'),
         notifBadge:            get('notif-badge'),
         chatView:              get('chat-view'),
@@ -3291,6 +3874,8 @@ async function initApp() {
             if (!els.timelineDiv.classList.contains('hidden'))     refreshCurrentTimeline();
             else if (els.feedsView && !els.feedsView.classList.contains('hidden'))
                                                                     refreshFeedPreferences().then(loadSuggestedFeeds);
+            else if (els.discoveryView && !els.discoveryView.classList.contains('hidden'))
+                                                                    refreshDiscovery({ clear: true });
             else if (!els.notifDiv.classList.contains('hidden'))   viewLoader.fetchNotifications();
             else if (!els.chatView.classList.contains('hidden'))   fetchConvos();
             else if (els.bookmarksView && !els.bookmarksView.classList.contains('hidden'))
@@ -3591,6 +4176,7 @@ async function initApp() {
 
     get('nav-home')?.addEventListener('click',          () => { nav.push({type:'home'}, _activeView); updateBackBtn(); switchView('home', els.timelineDiv); viewLoader.fetchTimeline(); });
     get('nav-feeds')?.addEventListener('click',         () => window.openFeedsManager());
+    get('nav-discovery')?.addEventListener('click',     () => window.openDiscovery());
     get('nav-notifications')?.addEventListener('click', () => { nav.push({type:'notifications'}, _activeView); updateBackBtn(); switchView('notifications', els.notifDiv); viewLoader.fetchNotifications(); });
     get('nav-chat')?.addEventListener('click',          () => { nav.push({type:'chat'}, _activeView); updateBackBtn(); switchView('chat', els.chatView); fetchConvos(); });
     get('nav-search')?.addEventListener('click',        () => { nav.push({type:'search'}, _activeView); updateBackBtn(); switchView('search', els.searchView); });

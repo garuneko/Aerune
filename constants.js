@@ -22,7 +22,7 @@ for (const [k, v] of Object.entries(SVG_ICONS)) {
 
 const translations = {
     ja: {
-        nav_home:"ホーム",nav_notifications:"通知",nav_search:"検索",nav_profile:"プロフィール",nav_thread:"スレッド",nav_chat:"チャット",nav_settings:"設定",nav_bookmarks:"ブックマーク",nav_feeds:"フィード",
+        nav_home:"ホーム",nav_notifications:"通知",nav_search:"検索",nav_discovery:"みつける",nav_profile:"プロフィール",nav_thread:"スレッド",nav_chat:"チャット",nav_settings:"設定",nav_bookmarks:"ブックマーク",nav_feeds:"フィード",
         add_account:"＋ アカウント追加",logout:"ログアウト",post_placeholder:"今なにしてる？",send:"送信",cancel:"キャンセル",
         login_title:"Aerune ログイン",login_id:"ハンドル名 (handle.bsky.social)",login_pw:"アプリパスワード",login_btn:"ログイン",
         reply_placeholder:"@{0} への返信",quote_placeholder:"@{0} を引用中...",login_failed:"ログインに失敗しました。",post_failed:"投稿に失敗しました。下書きは保持されています。",
@@ -81,6 +81,7 @@ const translations = {
         feeds_search_results:"検索結果",feeds_none:"フィードはありません",feeds_saved_empty:"保存済みフィードはありません",feeds_add:"追加",feeds_remove:"削除",
         feeds_pin:"ピン留め",feeds_unpin:"ピン解除",feeds_move_up:"上へ",feeds_move_down:"下へ",feeds_selected:"選択中",feeds_refresh:"再読み込み",
         feeds_loading:"フィードを読み込み中...",feeds_error:"フィードの読み込みに失敗しました",feed_by_author:"by @{0}",feed_like_count:"{0} likes",
+        discovery_loading:"候補を探しています...",discovery_empty:"まだ候補がありません。少し時間をおいて更新してください。",discovery_failed:"おすすめの取得に失敗しました。",discovery_not_interested:"興味なし",discovery_reason_follow:"{0}さんと近い関心",discovery_reason_like:"あなたがいいねした{0}さんとつながりがあります",discovery_reason_distant:"少し離れたつながり",discovery_reason_more:"ほか{0}件",discovery_followed:"フォローしました。",
         pinned_post:"固定されたポスト",
         ctx_reply:"返信",ctx_repost:"リポスト",ctx_quote:"引用",ctx_profile:"プロフィールを見る",
         ctx_pin:"固定ポストに設定",ctx_unpin:"固定ポストを解除",
@@ -108,7 +109,7 @@ const translations = {
         login_unknown:"原因を調べるためにブラウザ版を開きますか？"
     },
     en: {
-        nav_home:"Home",nav_notifications:"Notifications",nav_search:"Search",nav_profile:"Profile",nav_thread:"Thread",nav_chat:"Chat",nav_settings:"Settings",nav_bookmarks:"Bookmarks",nav_feeds:"Feeds",
+        nav_home:"Home",nav_notifications:"Notifications",nav_search:"Search",nav_discovery:"Discover",nav_profile:"Profile",nav_thread:"Thread",nav_chat:"Chat",nav_settings:"Settings",nav_bookmarks:"Bookmarks",nav_feeds:"Feeds",
         add_account:"+ Add Account",logout:"Logout",post_placeholder:"What's up?",send:"Post",cancel:"Cancel",
         login_title:"Login to Aerune",login_id:"Handle (handle.bsky.social)",login_pw:"App Password",login_btn:"Login",
         reply_placeholder:"Reply to @{0}",quote_placeholder:"Quoting @{0}...",login_failed:"Login failed.",post_failed:"Post failed. Draft is kept.",
@@ -167,6 +168,7 @@ const translations = {
         feeds_search_results:"Search Results",feeds_none:"No feeds found",feeds_saved_empty:"No saved feeds",feeds_add:"Add",feeds_remove:"Remove",
         feeds_pin:"Pin",feeds_unpin:"Unpin",feeds_move_up:"Move up",feeds_move_down:"Move down",feeds_selected:"Selected",feeds_refresh:"Reload",
         feeds_loading:"Loading feeds...",feeds_error:"Failed to load feeds",feed_by_author:"by @{0}",feed_like_count:"{0} likes",
+        discovery_loading:"Finding recommendations...",discovery_empty:"No recommendations yet. Try refreshing again later.",discovery_failed:"Failed to load recommendations.",discovery_not_interested:"Not interested",discovery_reason_follow:"Shared interests around {0}",discovery_reason_like:"Connected to {0}, whose post you liked",discovery_reason_distant:"A slightly different connection",discovery_reason_more:"and {0} more",discovery_followed:"Followed.",
         pinned_post:"Pinned Post",
         ctx_reply:"Reply",ctx_repost:"Repost",ctx_quote:"Quote",ctx_profile:"View Profile",
         ctx_pin:"Pin Post",ctx_unpin:"Unpin Post",
@@ -196,7 +198,7 @@ const translations = {
 };
 
 translations['pt-BR'] = {
-    nav_home:"Início",nav_notifications:"Notificações",nav_search:"Buscar",nav_profile:"Perfil",nav_thread:"Conversa",nav_chat:"Chat",nav_settings:"Ajustes",nav_bookmarks:"Favoritos",nav_feeds:"Feeds",
+    nav_home:"Início",nav_notifications:"Notificações",nav_search:"Buscar",nav_discovery:"Descobrir",nav_profile:"Perfil",nav_thread:"Conversa",nav_chat:"Chat",nav_settings:"Ajustes",nav_bookmarks:"Favoritos",nav_feeds:"Feeds",
     add_account:"+ Adicionar conta",logout:"Sair",post_placeholder:"O que está acontecendo?",send:"Publicar",cancel:"Cancelar",
     login_title:"Entrar no Aerune",login_id:"Handle (handle.bsky.social)",login_pw:"Senha de app",login_btn:"Entrar",
     reply_placeholder:"Responder a @{0}",quote_placeholder:"Citando @{0}...",login_failed:"Falha ao entrar.",post_failed:"Falha ao publicar. O rascunho foi mantido.",
@@ -231,6 +233,7 @@ translations['pt-BR'] = {
     video_upload_limit:"Limite de upload de vídeo atingido: {0}",video_uploading:"Enviando vídeo... {0}%",video_processing:"Processando vídeo...",video_compressing:"Comprimindo vídeo... {0}%",video_compress_retry:"Recomprimindo vídeo... {0}%",video_compress_failed:"Falha ao comprimir vídeo.",video_will_compress:"Será comprimido para MP4 antes de publicar",video_failed:"Falha ao publicar vídeo.",video_with_images_error:"Imagens e vídeo não podem ser anexados juntos.",
     draft_save_failed:"Falha ao salvar rascunho.",
     feeds_manage:"Gerenciar feeds",feeds_source:"Fonte da TL",feeds_open_manager:"Gerenciar feeds",feeds_saved:"Feeds salvos",feeds_pinned:"Feeds fixados",feeds_discover:"Descobrir feeds",feeds_suggested:"Feeds sugeridos",feeds_search:"Buscar feeds",feeds_search_placeholder:"Buscar feeds por palavra-chave",feeds_search_results:"Resultados",feeds_none:"Nenhum feed",feeds_saved_empty:"Nenhum feed salvo",feeds_add:"Adicionar",feeds_remove:"Remover",feeds_pin:"Fixar",feeds_unpin:"Desafixar",feeds_move_up:"Para cima",feeds_move_down:"Para baixo",feeds_selected:"Selecionado",feeds_refresh:"Recarregar",feeds_loading:"Carregando feeds...",feeds_error:"Falha ao carregar feeds",feed_by_author:"por @{0}",feed_like_count:"{0} curtidas",
+    discovery_loading:"Buscando recomendações...",discovery_empty:"Ainda não há recomendações. Tente atualizar novamente mais tarde.",discovery_failed:"Falha ao carregar recomendações.",discovery_not_interested:"Não tenho interesse",discovery_reason_follow:"Interesses próximos de {0}",discovery_reason_like:"Conectado a {0}, cuja publicação você curtiu",discovery_reason_distant:"Uma conexão um pouco diferente",discovery_reason_more:"e mais {0}",discovery_followed:"Seguido.",
     pinned_post:"Publicação fixada",
     ctx_reply:"Responder",ctx_repost:"Repostar",ctx_quote:"Citar",ctx_profile:"Ver perfil",ctx_pin:"Fixar publicação",ctx_unpin:"Desafixar publicação",ctx_follow:"Seguir",ctx_unfollow:"Deixar de seguir",ctx_mute:"Silenciar",ctx_unmute:"Reativar",ctx_block:"Bloquear",ctx_unblock:"Desbloquear",ctx_bookmark:"Adicionar aos favoritos",ctx_unbookmark:"Remover favorito",ctx_copy_url:"Copiar URL",ctx_copy_text:"Copiar texto",ctx_translate_deepl:"Traduzir (abrir no DeepL)",ctx_send_dm:"Enviar por DM",ctx_report:"Denunciar publicação",ctx_report_account:"Denunciar conta",
     copied:"Copiado",dm_recipient_prompt:"Digite o handle ou DID do destinatário",dm_sent:"DM enviada",dm_failed:"Falha ao enviar DM.",dm_unavailable:"Você não pode enviar DM para esta conta.",
@@ -244,7 +247,7 @@ translations['pt-BR'] = {
 };
 
 translations.ar = {
-    nav_home:"الرئيسية",nav_notifications:"الإشعارات",nav_search:"بحث",nav_profile:"الملف الشخصي",nav_thread:"المحادثة",nav_chat:"الدردشة",nav_settings:"الإعدادات",nav_bookmarks:"الإشارات المرجعية",nav_feeds:"الخلاصات",
+    nav_home:"الرئيسية",nav_notifications:"الإشعارات",nav_search:"بحث",nav_discovery:"اكتشف",nav_profile:"الملف الشخصي",nav_thread:"المحادثة",nav_chat:"الدردشة",nav_settings:"الإعدادات",nav_bookmarks:"الإشارات المرجعية",nav_feeds:"الخلاصات",
     add_account:"+ إضافة حساب",logout:"تسجيل الخروج",post_placeholder:"ماذا يحدث؟",send:"نشر",cancel:"إلغاء",
     login_title:"تسجيل الدخول إلى Aerune",login_id:"المعرّف (handle.bsky.social)",login_pw:"كلمة مرور التطبيق",login_btn:"دخول",
     reply_placeholder:"رد على @{0}",quote_placeholder:"اقتباس @{0}...",login_failed:"فشل تسجيل الدخول.",post_failed:"فشل النشر. تم الاحتفاظ بالمسودة.",
@@ -279,6 +282,7 @@ translations.ar = {
     video_upload_limit:"تم بلوغ حد رفع الفيديو: {0}",video_uploading:"جار رفع الفيديو... {0}%",video_processing:"جار معالجة الفيديو...",video_compressing:"جار ضغط الفيديو... {0}%",video_compress_retry:"إعادة ضغط الفيديو... {0}%",video_compress_failed:"فشل ضغط الفيديو.",video_will_compress:"سيتم ضغطه إلى MP4 قبل النشر",video_failed:"فشل نشر الفيديو.",video_with_images_error:"لا يمكن إرفاق الصور والفيديو معًا.",
     draft_save_failed:"فشل حفظ المسودة.",
     feeds_manage:"إدارة الخلاصات",feeds_source:"مصدر الخط الزمني",feeds_open_manager:"إدارة الخلاصات",feeds_saved:"الخلاصات المحفوظة",feeds_pinned:"الخلاصات المثبتة",feeds_discover:"اكتشاف الخلاصات",feeds_suggested:"خلاصات مقترحة",feeds_search:"بحث في الخلاصات",feeds_search_placeholder:"ابحث عن خلاصات بكلمة",feeds_search_results:"النتائج",feeds_none:"لا توجد خلاصات",feeds_saved_empty:"لا توجد خلاصات محفوظة",feeds_add:"إضافة",feeds_remove:"إزالة",feeds_pin:"تثبيت",feeds_unpin:"إلغاء التثبيت",feeds_move_up:"لأعلى",feeds_move_down:"لأسفل",feeds_selected:"محدد",feeds_refresh:"إعادة تحميل",feeds_loading:"جار تحميل الخلاصات...",feeds_error:"فشل تحميل الخلاصات",feed_by_author:"بواسطة @{0}",feed_like_count:"{0} إعجاب",
+    discovery_loading:"جار البحث عن توصيات...",discovery_empty:"لا توجد توصيات بعد. حاول التحديث لاحقًا.",discovery_failed:"فشل تحميل التوصيات.",discovery_not_interested:"غير مهتم",discovery_reason_follow:"اهتمامات قريبة من {0}",discovery_reason_like:"مرتبط بـ {0} الذي أعجبك منشوره",discovery_reason_distant:"صلة مختلفة قليلًا",discovery_reason_more:"و{0} أخرى",discovery_followed:"تمت المتابعة.",
     pinned_post:"منشور مثبت",
     ctx_reply:"رد",ctx_repost:"إعادة نشر",ctx_quote:"اقتباس",ctx_profile:"عرض الملف",ctx_pin:"تثبيت المنشور",ctx_unpin:"إلغاء تثبيت المنشور",ctx_follow:"متابعة",ctx_unfollow:"إلغاء المتابعة",ctx_mute:"كتم",ctx_unmute:"إلغاء الكتم",ctx_block:"حظر",ctx_unblock:"إلغاء الحظر",ctx_bookmark:"إضافة إلى الإشارات المرجعية",ctx_unbookmark:"إزالة الإشارة المرجعية",ctx_copy_url:"نسخ الرابط",ctx_copy_text:"نسخ النص",ctx_translate_deepl:"ترجمة (فتح في DeepL)",ctx_send_dm:"إرسال عبر رسالة",ctx_report:"الإبلاغ عن المنشور",ctx_report_account:"الإبلاغ عن الحساب",
     copied:"تم النسخ",dm_recipient_prompt:"أدخل معرّف أو DID المستلم",dm_sent:"تم إرسال الرسالة",dm_failed:"فشل إرسال الرسالة.",dm_unavailable:"لا يمكنك إرسال رسالة إلى هذا الحساب.",

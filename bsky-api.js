@@ -339,10 +339,17 @@ class BskyAPI {
         throw new Error('Video processing timed out.');
     }
     
-    async getAuthorFeed(actor, limit = 30, cursor = undefined) { 
+    async getAuthorFeed(actor, limit = 30, cursor = undefined, filter = undefined) {
         const params = { actor, limit };
         if (cursor) params.cursor = cursor;
+        if (filter) params.filter = filter;
         return await this.agent.getAuthorFeed(params); 
+    }
+
+    async getActorLikes(actor, limit = 30, cursor = undefined) {
+        const params = { actor, limit };
+        if (cursor) params.cursor = cursor;
+        return await this._xrpc('app.bsky.feed.getActorLikes', params);
     }
 
     async searchActors(query, limit = 30, cursor = undefined) {
@@ -361,6 +368,10 @@ class BskyAPI {
         const params = { actor, limit };
         if (cursor) params.cursor = cursor;
         return await this._xrpc('app.bsky.graph.getFollowers', params);
+    }
+
+    async getSuggestedFollowsByActor(actor) {
+        return await this._xrpc('app.bsky.graph.getSuggestedFollowsByActor', { actor });
     }
         
     // ─── スレッド ─────────────────────────────────────────────────
