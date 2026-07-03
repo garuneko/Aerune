@@ -784,8 +784,18 @@ function formatDuration(seconds) {
     return String(Math.round(seconds || 0));
 }
 
+function localFfmpegPath() {
+    if (process.env.AERUNE_FFMPEG_PATH) return process.env.AERUNE_FFMPEG_PATH;
+    const platformDir = `${process.platform}-${process.arch}`;
+    const exe = process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg';
+    const base = process.defaultApp ? __dirname : process.resourcesPath;
+    return nodePath.join(base, process.defaultApp ? 'vendor' : 'bin', 'ffmpeg', platformDir, exe);
+}
+
 function canCompressVideoLocally() {
-    return process.platform === 'darwin' && process.arch === 'arm64';
+    const supportedPlatform = (process.platform === 'darwin' && process.arch === 'arm64') ||
+        (process.platform === 'win32' && process.arch === 'x64');
+    return supportedPlatform && nodeFs.existsSync(localFfmpegPath());
 }
 
 function videoFilePath(file) {

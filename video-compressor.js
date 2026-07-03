@@ -6,7 +6,14 @@ const path = require('path');
 
 const MAX_UPLOAD_BYTES = 100000000;
 const activeJobs = new Map();
-let phaseACheck = null;
+const ffmpegChecks = new Map();
+const FORBIDDEN_FFMPEG_FLAGS = [
+    '--enable-gpl',
+    '--enable-nonfree',
+    '--enable-libx264',
+    '--enable-libx265',
+    '--enable-libfdk-aac'
+];
 
 function bundledFfmpegPath() {
     if (process.env.AERUNE_FFMPEG_PATH) return process.env.AERUNE_FFMPEG_PATH;
@@ -76,15 +83,75 @@ function runProbeProcess(exe, args) {
     });
 }
 
-async function ensurePhaseAFfmpeg(ffmpegPath) {
-    if (phaseACheck) return phaseACheck;
-    phaseACheck = (async () => {
-        if (process.platform !== 'darwin' || process.arch !== 'arm64') {
-            throw new Error('Phase A video compression supports macOS arm64 only.');
-        }
+function ffmpegPlatformKey() {
+    return `${process.platform}-${process.arch}`;
+}
+
+function hasEncoder(encoders, name) {
+    return new RegExp(`(^|\\s)${name}(\\s|$)`).test(encoders);
+}
+
+function validateLgplBuild(buildconf, encoders) {
+    const hit = FORBIDDEN_FFMPEG_FLAGS.find(flag => buildconf.includes(flag));
+    if (hit) throw new Error(`Bundled FFmpeg is not LGPL-safe for Aerune: ${hit}`);
+    for (const encoder of ['libx264', 'libx265']) {
+        if (hasEncoder(encoders, encoder)) throw new Error(`Bundled FFmpeg exposes forbidden encoder: ${encoder}`);
+    }
+}
+
+function encoderSmokeArgs(encoder, outputPath) {
+    const args = [
+        '-hide_banner',
+        '-nostdin',
+        '-y',
+        '-f', 'lavfi',
+        '-i', 'color=c=black:s=32x32:d=0.15',
+        '-an',
+        '-vf', 'format=yuv420p',
+        '-frames:v', '4',
+        '-c:v', encoder
+    ];
+    if (encoder === 'h264_videotoolbox') args.push('-allow_sw', '1');
+    args.push('-f', 'mp4', outputPath);
+    return args;
+}
+
+async function encoderWorks(ffmpegPath, encoder) {
+    const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'aerune-video-encoder-'));
+    const outputPath = path.join(tempDir, `${encoder}.mp4`);
+    try {
+        await runProcess(ffmpegPath, encoderSmokeArgs(encoder, outputPath));
+        return fs.existsSync(outputPath);
+    } catch {
+        return false;
+    } finally {
+        await fs.promises.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+    }
+}
+
+async function selectWindowsEncoder(ffmpegPath, encoders) {
+    if (hasEncoder(encoders, 'h264_mf') && await encoderWorks(ffmpegPath, 'h264_mf')) {
+        return 'h264_mf';
+    }
+    if (hasEncoder(encoders, 'libopenh264')) {
+        return 'libopenh264';
+    }
+    throw new Error('Bundled FFmpeg does not include a usable Windows H.264 encoder (h264_mf or libopenh264).');
+}
+
+async function ensureFfmpegCapabilities(ffmpegPath) {
+    const platformKey = ffmpegPlatformKey();
+    const cacheKey = `${platformKey}:${ffmpegPath}`;
+    if (ffmpegChecks.has(cacheKey)) return ffmpegChecks.get(cacheKey);
+
+    const check = (async () => {
         if (!fs.existsSync(ffmpegPath)) {
             throw new Error(`Bundled FFmpeg was not found: ${ffmpegPath}`);
         }
+        if (platformKey !== 'darwin-arm64' && platformKey !== 'win32-x64') {
+            throw new Error('Local video compression supports macOS arm64 and Windows x64 only.');
+        }
+
         const [buildRes, encoderRes, hwaccelRes] = await Promise.all([
             runProcess(ffmpegPath, ['-hide_banner', '-buildconf']),
             runProcess(ffmpegPath, ['-hide_banner', '-encoders']),
@@ -93,24 +160,25 @@ async function ensurePhaseAFfmpeg(ffmpegPath) {
         const buildconf = `${buildRes.stdout}\n${buildRes.stderr}`;
         const encoders = `${encoderRes.stdout}\n${encoderRes.stderr}`;
         const hwaccels = `${hwaccelRes.stdout}\n${hwaccelRes.stderr}`;
-        const forbidden = [
-            '--enable-gpl',
-            '--enable-nonfree',
-            '--enable-libx264',
-            '--enable-libx265',
-            '--enable-libfdk-aac'
-        ];
-        const hit = forbidden.find(flag => buildconf.includes(flag));
-        if (hit) throw new Error(`Bundled FFmpeg is not LGPL-safe for Aerune: ${hit}`);
-        if (!encoders.includes('h264_videotoolbox')) {
-            throw new Error('Bundled FFmpeg does not include h264_videotoolbox.');
+        validateLgplBuild(buildconf, encoders);
+
+        if (platformKey === 'darwin-arm64') {
+            if (!hasEncoder(encoders, 'h264_videotoolbox')) {
+                throw new Error('Bundled FFmpeg does not include h264_videotoolbox.');
+            }
+            if (!hwaccels.includes('videotoolbox')) {
+                throw new Error('Bundled FFmpeg does not include VideoToolbox hwaccel support.');
+            }
+            return { encoder: 'h264_videotoolbox', platformKey };
         }
-        if (!hwaccels.includes('videotoolbox')) {
-            throw new Error('Bundled FFmpeg does not include VideoToolbox hwaccel support.');
-        }
-        return true;
+
+        return {
+            encoder: await selectWindowsEncoder(ffmpegPath, encoders),
+            platformKey
+        };
     })();
-    return phaseACheck;
+    ffmpegChecks.set(cacheKey, check);
+    return check;
 }
 
 function parseProbeMetadata(rawText) {
@@ -139,7 +207,7 @@ function parseProbeMetadata(rawText) {
 
 async function probeVideo(_event, options = {}) {
     const ffmpegPath = bundledFfmpegPath();
-    await ensurePhaseAFfmpeg(ffmpegPath);
+    await ensureFfmpegCapabilities(ffmpegPath);
     const inputPath = options.inputPath;
     if (!inputPath || !fs.existsSync(inputPath)) throw new Error('Input video file was not found.');
     const result = await runProbeProcess(ffmpegPath, ['-hide_banner', '-nostdin', '-i', inputPath]);
@@ -158,7 +226,23 @@ function bitratePlan(duration, attempt) {
     };
 }
 
-function ffmpegArgs(inputPath, outputPath, attempt, duration) {
+function videoEncoderArgs(encoder, bitrates) {
+    const args = ['-c:v', encoder];
+    if (encoder === 'h264_videotoolbox') {
+        args.push('-allow_sw', '1', '-profile:v', 'main');
+    } else if (encoder === 'libopenh264') {
+        args.push('-profile:v', 'main');
+    }
+    args.push(
+        '-b:v', String(bitrates.videoBps),
+        '-maxrate', String(bitrates.maxrate),
+        '-bufsize', String(bitrates.bufsize),
+        '-tag:v', 'avc1'
+    );
+    return args;
+}
+
+function ffmpegArgs(inputPath, outputPath, attempt, duration, encoder) {
     const bitrates = bitratePlan(duration, attempt);
     return [
         '-hide_banner',
@@ -169,13 +253,7 @@ function ffmpegArgs(inputPath, outputPath, attempt, duration) {
         '-map', '0:a:0?',
         '-vf', `scale='min(${attempt.maxSide},iw)':'min(${attempt.maxSide},ih)':force_original_aspect_ratio=decrease:force_divisible_by=2,format=yuv420p`,
         '-fpsmax', '30',
-        '-c:v', 'h264_videotoolbox',
-        '-allow_sw', '1',
-        '-profile:v', 'main',
-        '-b:v', String(bitrates.videoBps),
-        '-maxrate', String(bitrates.maxrate),
-        '-bufsize', String(bitrates.bufsize),
-        '-tag:v', 'avc1',
+        ...videoEncoderArgs(encoder, bitrates),
         '-c:a', 'aac',
         '-b:a', `${Math.round(attempt.audioBitrate / 1000)}k`,
         '-ac', '2',
@@ -210,7 +288,7 @@ function parseProgressChunk(state, chunk) {
 
 async function compressVideo(event, options = {}) {
     const ffmpegPath = bundledFfmpegPath();
-    await ensurePhaseAFfmpeg(ffmpegPath);
+    const capabilities = await ensureFfmpegCapabilities(ffmpegPath);
 
     const jobId = options.jobId || `video-${Date.now()}`;
     const duration = Math.max(1, Number(options.duration || 0));
@@ -239,7 +317,7 @@ async function compressVideo(event, options = {}) {
                 }
             };
             event.sender.send('video-compress-progress', { jobId, attempt: i + 1, progress: 0 });
-            await runProcess(ffmpegPath, ffmpegArgs(inputPath, outputPath, attempt, duration), {
+            await runProcess(ffmpegPath, ffmpegArgs(inputPath, outputPath, attempt, duration, capabilities.encoder), {
                 jobId,
                 onStdout: chunk => parseProgressChunk(progressState, chunk)
             });
