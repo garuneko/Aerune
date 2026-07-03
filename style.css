@@ -236,7 +236,11 @@ body[data-font-size="2"] .msg-bubble { font-size: 20px; }
     cursor: pointer;
 }
 .actor-actions button.is-member,
-.local-list-action.is-member { border-color: #16a34a; color: #15803d; }
+.local-list-action.is-member,
+[data-act="local-list-toggle"].is-member {
+    border-color: #16a34a;
+    color: #15803d;
+}
 .danger-action { border-color: #fca5a5 !important; color: #d93025 !important; }
 .profile-stat-link {
     color: inherit;
@@ -834,6 +838,17 @@ body[data-font-size="2"] .msg-bubble { font-size: 20px; }
     font-weight: 800;
     margin-bottom: 12px;
 }
+.settings-local-list-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+.settings-panel-count {
+    color: var(--text-sub);
+    font-size: 12px;
+    font-weight: 700;
+}
 .settings-check,
 .settings-field {
     display: flex;
@@ -857,6 +872,60 @@ body[data-font-size="2"] .msg-bubble { font-size: 20px; }
     display: flex;
     flex-direction: column;
     gap: 8px;
+}
+.settings-local-list-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+.settings-local-list-toolbar button {
+    border: 1px solid var(--border-color);
+    background: #fff;
+    border-radius: 8px;
+    padding: 7px 10px;
+    cursor: pointer;
+    font-weight: 800;
+}
+.settings-local-list-toolbar button:first-child {
+    border-color: var(--bsky-blue);
+    color: var(--bsky-blue);
+}
+.settings-local-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.settings-local-list-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 10px;
+}
+.settings-local-list-avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: #eef2f7;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+.settings-local-list-main {
+    min-width: 0;
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 2px;
+}
+.settings-local-list-main span,
+.settings-local-list-main small {
+    color: var(--text-sub);
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 .settings-account-row {
     display: flex;
@@ -913,14 +982,17 @@ body[data-font-size="2"] .msg-bubble { font-size: 20px; }
 
 @media (max-width: 700px) {
     .settings-field,
-    .settings-account-row {
+    .settings-account-row,
+    .settings-local-list-row {
         align-items: stretch;
         flex-direction: column;
     }
     .settings-field select,
-    .settings-account-actions {
+    .settings-account-actions,
+    .settings-local-list-toolbar {
         width: 100%;
     }
+    .settings-local-list-toolbar button,
     .settings-account-actions button {
         flex: 1;
     }
@@ -1001,6 +1073,10 @@ body.rtl .settings-field,
 body.rtl .settings-check,
 body.rtl .settings-account-row,
 body.rtl .settings-account-actions,
+body.rtl .settings-local-list-title,
+body.rtl .settings-local-list-toolbar,
+body.rtl .settings-local-list-row,
+body.rtl .settings-local-list-main,
 body.rtl .mute-rule-form,
 body.rtl .mute-rule-check,
 body.rtl .mod-sub-form,

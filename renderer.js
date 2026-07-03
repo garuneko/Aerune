@@ -56,6 +56,7 @@ const feedState = {
     searchResults: [],
     searchQuery: '',
     selectedFeed: null,
+    selectedLocalList: false,
     configuredDid: null,
     isLoading: false,
     errorMessage: ''
@@ -145,22 +146,46 @@ const getRenderContext = () => ({
 const accountKey = (prefix) => `${prefix}_${currentDid || api.session?.did || 'anon'}`;
 const muteWordsKey = () => accountKey('aerune_mute_words');
 const muteRulesKey = () => accountKey('aerune_mute_rules');
-const timelineSourceKey = () => feedState.selectedFeed?.value ? `feed:${feedState.selectedFeed.value}` : 'home';
+const LOCAL_LIST_SOURCE_VALUE = '__aerune_local_list__';
+const timelineSourceKey = () => feedState.selectedLocalList ? 'local-list' : (feedState.selectedFeed?.value ? `feed:${feedState.selectedFeed.value}` : 'home');
 const localListKey = () => accountKey('aerune_local_list_members');
 const notificationUnreadKey = () => accountKey('aerune_notif_unread_count');
+
+function normalizeLocalListMember(member) {
+    if (!member || typeof member !== 'object' || !member.did) return null;
+    return {
+        did: String(member.did),
+        handle: String(member.handle || ''),
+        displayName: String(member.displayName || ''),
+        avatar: String(member.avatar || ''),
+        addedAt: member.addedAt || new Date().toISOString()
+    };
+}
+
+function normalizeLocalListMembers(members) {
+    const seen = new Set();
+    const normalized = [];
+    for (const member of Array.isArray(members) ? members : []) {
+        const item = normalizeLocalListMember(member);
+        if (!item || seen.has(item.did)) continue;
+        seen.add(item.did);
+        normalized.push(item);
+    }
+    return normalized;
+}
 
 function readLocalListMembers() {
     try {
         const raw = localStorage.getItem(localListKey());
         const members = raw ? JSON.parse(raw) : [];
-        return Array.isArray(members) ? members : [];
+        return normalizeLocalListMembers(members);
     } catch {
         return [];
     }
 }
 
 function saveLocalListMembers(members) {
-    localStorage.setItem(localListKey(), JSON.stringify(members));
+    localStorage.setItem(localListKey(), JSON.stringify(normalizeLocalListMembers(members)));
 }
 
 function isLocalListMember(did) {
@@ -175,7 +200,11 @@ function toggleLocalListMember(actor) {
     if (idx >= 0) {
         members.splice(idx, 1);
         saveLocalListMembers(members);
-        alert(t('locallist_removed'));
+        syncLocalListButtons(actor.did, false);
+        renderLocalListSettings();
+        renderFeedControls();
+        refreshLocalListTimelineIfActive();
+        showToast(t('locallist_title'), t('locallist_removed'));
         return false;
     }
     members.push({
@@ -186,8 +215,107 @@ function toggleLocalListMember(actor) {
         addedAt: new Date().toISOString()
     });
     saveLocalListMembers(members);
-    alert(t('locallist_added'));
+    syncLocalListButtons(actor.did, true);
+    renderLocalListSettings();
+    renderFeedControls();
+    refreshLocalListTimelineIfActive();
+    showToast(t('locallist_title'), t('locallist_added'));
     return true;
+}
+
+function removeLocalListMember(did) {
+    if (!did) return;
+    const next = readLocalListMembers().filter(member => member.did !== did);
+    saveLocalListMembers(next);
+    syncLocalListButtons(did, false);
+    renderLocalListSettings();
+    renderFeedControls();
+    refreshLocalListTimelineIfActive();
+    showToast(t('locallist_title'), t('locallist_removed'));
+}
+
+function syncLocalListButtons(did, isMember = isLocalListMember(did)) {
+    if (!did) return;
+    document.querySelectorAll(`[data-act="local-list-toggle"][data-did="${CSS.escape(did)}"]`).forEach(btn => {
+        btn.classList.toggle('is-member', isMember);
+        btn.textContent = isMember ? t('locallist_remove') : t('locallist_add_member');
+    });
+}
+
+function currentTimelineSource() {
+    if (feedState.selectedLocalList) {
+        return {
+            kind: 'local-list',
+            value: LOCAL_LIST_SOURCE_VALUE,
+            displayName: t('locallist_title'),
+            members: readLocalListMembers()
+        };
+    }
+    return feedState.selectedFeed;
+}
+
+function localListImportItem(item) {
+    if (typeof item === 'string') return { did: item };
+    if (item?.did) return item;
+    if (item?.subject?.did) return item.subject;
+    if (item?.actor?.did) return item.actor;
+    return null;
+}
+
+function parseLocalListImport(text) {
+    const data = JSON.parse(text);
+    const rawItems = Array.isArray(data)
+        ? data
+        : (Array.isArray(data?.members) ? data.members
+            : (Array.isArray(data?.items) ? data.items
+                : (Array.isArray(data?.localList) ? data.localList : [])));
+    return normalizeLocalListMembers(rawItems.map(localListImportItem));
+}
+
+function exportLocalList() {
+    const members = readLocalListMembers();
+    const payload = {
+        schema: 'aerune.localList.v1',
+        exportedAt: new Date().toISOString(),
+        accountDid: currentDid || api.session?.did || null,
+        members
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const date = new Date().toISOString().slice(0, 10);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `aerune-local-list-${date}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    showToast(t('locallist_title'), t('locallist_exported'));
+}
+
+async function importLocalListFile(file) {
+    if (!file) return;
+    try {
+        const incoming = parseLocalListImport(await file.text());
+        if (!incoming.length) throw new Error(t('locallist_import_invalid'));
+        const byDid = new Map(readLocalListMembers().map(member => [member.did, member]));
+        for (const member of incoming) {
+            const existing = byDid.get(member.did) || {};
+            byDid.set(member.did, {
+                ...existing,
+                ...member,
+                addedAt: existing.addedAt || member.addedAt || new Date().toISOString()
+            });
+        }
+        saveLocalListMembers([...byDid.values()]);
+        renderLocalListSettings();
+        renderFeedControls();
+        for (const member of incoming) syncLocalListButtons(member.did, true);
+        refreshLocalListTimelineIfActive();
+        showToast(t('locallist_title'), t('locallist_imported', String(incoming.length)));
+    } catch (e) {
+        alert(`${t('locallist_import_failed')}\n${e.message || e}`);
+    }
 }
 
 function setNotificationBadge(count) {
@@ -995,10 +1123,12 @@ async function hydrateSavedFeeds(items) {
 
 function setSelectedFeedFromStorage() {
     const savedUri = localStorage.getItem(feedSelectionKey());
+    feedState.selectedLocalList = savedUri === LOCAL_LIST_SOURCE_VALUE;
     feedState.selectedFeed = savedUri
+        && !feedState.selectedLocalList
         ? feedState.savedFeeds.find(feed => feed.value === savedUri) || null
         : null;
-    if (savedUri && !feedState.selectedFeed) localStorage.removeItem(feedSelectionKey());
+    if (savedUri && !feedState.selectedFeed && !feedState.selectedLocalList) localStorage.removeItem(feedSelectionKey());
 }
 
 async function refreshFeedPreferences() {
@@ -1036,6 +1166,7 @@ async function configureFeedsForCurrentAccount(force = false) {
     feedState.searchQuery = '';
     feedState.suggestedFeeds = [];
     feedState.selectedFeed = null;
+    feedState.selectedLocalList = false;
     await refreshFeedPreferences();
     await loadSuggestedFeeds();
 }
@@ -1113,13 +1244,20 @@ async function runFeedSearch() {
 
 function selectTimelineFeed(uri) {
     viewLoader?.saveTimelineScroll();
-    feedState.selectedFeed = uri ? feedState.savedFeeds.find(feed => feed.value === uri) || null : null;
-    if (feedState.selectedFeed) localStorage.setItem(feedSelectionKey(), feedState.selectedFeed.value);
+    feedState.selectedLocalList = uri === LOCAL_LIST_SOURCE_VALUE;
+    feedState.selectedFeed = uri && !feedState.selectedLocalList ? feedState.savedFeeds.find(feed => feed.value === uri) || null : null;
+    if (feedState.selectedLocalList) localStorage.setItem(feedSelectionKey(), LOCAL_LIST_SOURCE_VALUE);
+    else if (feedState.selectedFeed) localStorage.setItem(feedSelectionKey(), feedState.selectedFeed.value);
     else localStorage.removeItem(feedSelectionKey());
     resetTimelineNotice();
     renderFeedControls();
     switchView('home', els.timelineDiv);
     viewLoader.fetchTimeline();
+}
+
+function refreshLocalListTimelineIfActive() {
+    if (!feedState.selectedLocalList || !els.timelineDiv || els.timelineDiv.classList.contains('hidden')) return;
+    viewLoader?.fetchTimeline(false, { skipCache: true });
 }
 
 async function addFeedByUri(uri) {
@@ -1160,10 +1298,12 @@ function renderFeedControls() {
     if (!bar) return;
     const saved = feedState.savedFeeds;
     const pinned = saved.filter(feed => feed.pinned);
-    const selectedValue = feedState.selectedFeed?.value || '';
+    const selectedValue = feedState.selectedLocalList ? LOCAL_LIST_SOURCE_VALUE : (feedState.selectedFeed?.value || '');
+    const localListLabel = `${t('locallist_title')} (${readLocalListMembers().length})`;
 
     const options = [
         `<option value="" ${!selectedValue ? 'selected' : ''}>${escHTML(t('timeline_home'))}</option>`,
+        `<option value="${LOCAL_LIST_SOURCE_VALUE}" ${selectedValue === LOCAL_LIST_SOURCE_VALUE ? 'selected' : ''}>${escHTML(localListLabel)}</option>`,
         ...saved.map(feed => `<option value="${escAttr(feed.value)}" ${selectedValue === feed.value ? 'selected' : ''}>${escHTML(feedTitle(feed))}</option>`)
     ].join('');
     const chips = pinned.map(feed =>
@@ -1174,6 +1314,7 @@ function renderFeedControls() {
         `<div class="feed-source-controls">` +
         `<span class="feed-source-label">${escHTML(t('feeds_source'))}</span>` +
         `<button class="feed-chip${!selectedValue ? ' active' : ''}" data-act="feed-select-home">${escHTML(t('timeline_home'))}</button>` +
+        `<button class="feed-chip${selectedValue === LOCAL_LIST_SOURCE_VALUE ? ' active' : ''}" data-act="feed-select-local-list">${escHTML(t('locallist_title'))}</button>` +
         `<div class="feed-chip-row">${chips}</div>` +
         `<select id="feed-source-select" class="feed-source-select">${options}</select>` +
         `</div>` +
@@ -1315,7 +1456,7 @@ function goBack() {
 let viewLoader, actions;
 
 function initModules() {
-    viewLoader = new ViewLoader(api, getRenderContext, els, () => feedState.selectedFeed);
+    viewLoader = new ViewLoader(api, getRenderContext, els, currentTimelineSource);
     actions = new AppActions(api, t, {
         timeline:  () => viewLoader.fetchTimeline(),
         bookmarks: () => viewLoader.fetchBookmarks(),
@@ -1776,6 +1917,11 @@ function installDelegates() {
                 selectTimelineFeed('');
                 return;
             }
+            case 'feed-select-local-list': {
+                e.preventDefault(); e.stopPropagation();
+                selectTimelineFeed(LOCAL_LIST_SOURCE_VALUE);
+                return;
+            }
             case 'feed-select': {
                 e.preventDefault(); e.stopPropagation();
                 selectTimelineFeed(actEl.dataset.uri || '');
@@ -1838,9 +1984,22 @@ function installDelegates() {
             }
             case 'local-list-toggle': {
                 e.preventDefault(); e.stopPropagation();
-                const member = toggleLocalListMember(actorFromDataset(actEl));
-                actEl.classList.toggle('is-member', member);
-                actEl.textContent = member ? t('locallist_remove') : t('locallist_add_member');
+                toggleLocalListMember(actorFromDataset(actEl));
+                return;
+            }
+            case 'local-list-remove': {
+                e.preventDefault(); e.stopPropagation();
+                removeLocalListMember(actEl.dataset.did);
+                return;
+            }
+            case 'local-list-export': {
+                e.preventDefault(); e.stopPropagation();
+                exportLocalList();
+                return;
+            }
+            case 'local-list-import': {
+                e.preventDefault(); e.stopPropagation();
+                document.getElementById('local-list-import-input')?.click();
                 return;
             }
             case 'report-account': {
@@ -2231,6 +2390,7 @@ function refreshLocalizedDynamicUi() {
     if (els.feedsView && !els.feedsView.classList.contains('hidden')) renderFeedsView();
     renderMuteRulesList();
     renderSettingsAccounts();
+    renderLocalListSettings();
     updateVideoPreview();
     renderQuotePreview();
 }
@@ -2460,6 +2620,7 @@ async function switchAccount(did) {
         await configureFeedsForCurrentAccount(true);
         await restoreDraftForCurrentAccount();
         setupLoggedInUI();
+        renderLocalListSettings();
         if (notifTimer) clearInterval(notifTimer);
         notifTimer = setInterval(checkNotifs, 30000);
     } catch { showLoginForm(); }
@@ -2485,6 +2646,7 @@ function renderAccountList() {
     container.textContent = '';
     container.appendChild(frag);
     renderSettingsAccounts();
+    renderLocalListSettings();
 }
 
 function renderSettingsAccounts() {
@@ -2509,6 +2671,35 @@ function renderSettingsAccounts() {
     }).join('');
 }
 
+function renderLocalListSettings() {
+    const container = document.getElementById('settings-local-list-list');
+    const countEl = document.getElementById('settings-local-list-count');
+    if (!container) return;
+    const members = readLocalListMembers();
+    if (countEl) countEl.textContent = t('locallist_count', String(members.length));
+    if (!members.length) {
+        container.innerHTML = `<div class="settings-empty">${escHTML(t('locallist_empty'))}</div>`;
+        return;
+    }
+    container.innerHTML = members.map(member => {
+        const title = member.displayName || member.handle || member.did;
+        const handle = member.handle ? `@${member.handle}` : member.did;
+        const addedAt = member.addedAt ? new Date(member.addedAt).toLocaleString(currentLang) : '';
+        return `<div class="settings-local-list-row">` +
+            `<img class="settings-local-list-avatar" src="${escAttr(member.avatar || '')}" alt="" loading="lazy" decoding="async">` +
+            `<div class="settings-local-list-main">` +
+            `<strong>${escHTML(title)}</strong>` +
+            `<span>${escHTML(handle)}</span>` +
+            `${addedAt ? `<small>${escHTML(t('locallist_added_at', addedAt))}</small>` : ''}` +
+            `</div>` +
+            `<div class="settings-account-actions">` +
+            `<button type="button" data-act="profile" data-actor="${escAttr(member.did)}">${escHTML(t('locallist_open_profile'))}</button>` +
+            `<button type="button" class="danger-action" data-act="local-list-remove" data-did="${escAttr(member.did)}">${escHTML(t('locallist_remove'))}</button>` +
+            `</div>` +
+            `</div>`;
+    }).join('');
+}
+
 async function removeSavedAccount(did) {
     if (!did || !confirm(t('account_remove_confirm'))) return;
     const wasCurrent = did === currentDid;
@@ -2516,6 +2707,7 @@ async function removeSavedAccount(did) {
     await ipcRenderer.invoke('save-session', savedAccounts);
     renderAccountList();
     renderSettingsAccounts();
+    renderLocalListSettings();
     if (!wasCurrent) return;
     if (savedAccounts.length) {
         await switchAccount(savedAccounts[0].did);
@@ -3169,6 +3361,27 @@ async function initApp() {
         else els.settingsView.appendChild(panel);
     }
 
+    if (els.settingsView && !get('settings-local-list-panel')) {
+        const panel = document.createElement('div');
+        panel.id = 'settings-local-list-panel';
+        panel.className = 'settings-panel settings-local-list-panel';
+        panel.innerHTML =
+            `<div class="settings-panel-title settings-local-list-title">` +
+            `<span data-i18n="locallist_title">${t('locallist_title')}</span>` +
+            `<span id="settings-local-list-count" class="settings-panel-count"></span>` +
+            `</div>` +
+            `<div class="settings-local-list-toolbar">` +
+            `<button type="button" data-act="feed-select-local-list" data-i18n="locallist_open_timeline">${t('locallist_open_timeline')}</button>` +
+            `<button type="button" data-act="local-list-export" data-i18n="locallist_export">${t('locallist_export')}</button>` +
+            `<button type="button" data-act="local-list-import" data-i18n="locallist_import">${t('locallist_import')}</button>` +
+            `<input type="file" id="local-list-import-input" accept="application/json,.json" class="hidden">` +
+            `</div>` +
+            `<div id="settings-local-list-list" class="settings-local-list"></div>`;
+        const moderationHeading = els.settingsView.querySelector('[data-i18n="settings_moderation"]');
+        if (moderationHeading?.parentNode) moderationHeading.parentNode.insertBefore(panel, moderationHeading);
+        else els.settingsView.appendChild(panel);
+    }
+
     if (els.settingsView && !get('setting-mute-words-wrap')) {
         const wrap = document.createElement('div');
         wrap.id = 'setting-mute-words-wrap';
@@ -3271,6 +3484,7 @@ async function initApp() {
     loadMuteWords();
     renderMuteRulesList();
     renderSettingsAccounts();
+    renderLocalListSettings();
 
     applyTranslations();
 
@@ -3336,6 +3550,10 @@ async function initApp() {
     get('search-exec-btn')?.addEventListener('click', () => window.execSearch(undefined, false));
     get('search-input')?.addEventListener('input', () => scheduleSearch(false));
     get('search-input')?.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); window.execSearch(undefined, false); } });
+    get('local-list-import-input')?.addEventListener('change', async e => {
+        await importLocalListFile(e.target.files?.[0]);
+        e.target.value = '';
+    });
     get('setting-lang')?.addEventListener('change', e => {
         const nextLang = normalizeLanguage(e.target.value || currentLang);
         currentLang = nextLang;

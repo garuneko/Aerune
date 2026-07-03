@@ -21,7 +21,9 @@ class ViewLoader {
 
     timelineInfo() {
         const source = this.getTimelineSource?.();
-        const sourceKey = source?.value ? `feed:${source.value}` : 'home';
+        const sourceKey = source?.kind === 'local-list'
+            ? 'local-list'
+            : (source?.value ? `feed:${source.value}` : 'home');
         return { source, sourceKey, did: this.api.session?.did || 'anon' };
     }
 
@@ -209,6 +211,67 @@ class ViewLoader {
         return newFeed.filter(item => !this.isMutedItem(item));
     }
 
+    postTimestamp(item) {
+        const post = item?.post || item;
+        const raw = post?.indexedAt || post?.record?.createdAt || post?.value?.createdAt || '';
+        const ms = raw ? new Date(raw).getTime() : 0;
+        return Number.isFinite(ms) ? ms : 0;
+    }
+
+    async fetchLocalListTimeline(source, sourceKey, limit, isAppend) {
+        const members = Array.isArray(source?.members) ? source.members.filter(member => member?.did) : [];
+        if (!members.length) return { data: { feed: [], cursor: null } };
+
+        const existingCursors = isAppend && this.cursors[sourceKey] && typeof this.cursors[sourceKey] === 'object'
+            ? this.cursors[sourceKey]
+            : {};
+        const perMemberLimit = Math.max(3, Math.min(15, Math.ceil((limit * 1.5) / members.length)));
+        const responses = await Promise.all(members.map(async member => {
+            const cursor = existingCursors[member.did];
+            if (isAppend && !cursor) return { did: member.did, feed: [], cursor: null };
+            try {
+                const res = await this.api.getAuthorFeed(member.did, perMemberLimit, cursor);
+                return {
+                    did: member.did,
+                    feed: Array.isArray(res.data.feed) ? res.data.feed : [],
+                    cursor: res.data.cursor || null
+                };
+            } catch (e) {
+                console.warn('fetchLocalListTimeline:', member.did, e);
+                return { did: member.did, feed: [], cursor: cursor || null };
+            }
+        }));
+
+        const nextCursors = {};
+        const feed = [];
+        for (const response of responses) {
+            if (response.cursor) nextCursors[response.did] = response.cursor;
+            feed.push(...response.feed);
+        }
+
+        feed.sort((a, b) => this.postTimestamp(b) - this.postTimestamp(a));
+        return {
+            data: {
+                feed: feed.slice(0, limit),
+                cursor: Object.keys(nextCursors).length ? nextCursors : null
+            }
+        };
+    }
+
+    async fetchTimelinePage(source, sourceKey, limit, isAppend) {
+        if (source?.kind === 'local-list') return this.fetchLocalListTimeline(source, sourceKey, limit, isAppend);
+        return source?.value
+            ? this.api.getFeed(source.value, limit, this.cursors[sourceKey])
+            : this.api.getTimeline(limit, this.cursors[sourceKey]);
+    }
+
+    renderTimelineStatus(message) {
+        if (!this.els.timelineDiv) return;
+        requestAnimationFrame(() => {
+            this.els.timelineDiv.innerHTML = `<div class="feed-status">${escHTML(message)}</div>`;
+        });
+    }
+
     async fetchTimeline(isAppend = false, options = {}) {
         const { source, sourceKey } = this.timelineInfo();
         if (this.isLoading && (this.activeTimelineSourceKey == null || isAppend || this.activeTimelineSourceKey === sourceKey)) return;
@@ -236,9 +299,7 @@ class ViewLoader {
                 }
             }
 
-            const res = source?.value
-                ? await this.api.getFeed(source.value, 30, this.cursors[sourceKey])
-                : await this.api.getTimeline(30, this.cursors[sourceKey]);
+            const res = await this.fetchTimelinePage(source, sourceKey, 30, isAppend);
             if (this.timelineInfo().sourceKey !== sourceKey || this.timelineRequestId !== requestId) return;
 
             const rawFeed = Array.isArray(res.data.feed) ? res.data.feed : [];
@@ -253,7 +314,12 @@ class ViewLoader {
                 newFeed = newFeed.filter(item => !existing.has(item.post?.uri));
             }
 
-            renderPosts(newFeed, this.els.timelineDiv, this.getCtx(), isAppend);
+            if (!isAppend && source?.kind === 'local-list' && !newFeed.length) {
+                renderPosts([], this.els.timelineDiv, this.getCtx(), false);
+                this.renderTimelineStatus(source.members?.length ? this.getCtx().t('locallist_no_posts') : this.getCtx().t('locallist_empty'));
+            } else {
+                renderPosts(newFeed, this.els.timelineDiv, this.getCtx(), isAppend);
+            }
             if (options.scrollToTop) this.scrollTimelineTop();
             else if (!isAppend && this.getCtx().restoreScrollEnabled !== false) this.restoreTimelineScroll(sourceKey);
         } catch (e) { console.error('fetchTimeline:', e); }
@@ -269,10 +335,10 @@ class ViewLoader {
         const { source, sourceKey } = this.timelineInfo();
         const currentTop = this.getTopTimelineUri();
         if (!currentTop) return false;
+        const savedCursor = this.cursors[sourceKey];
         try {
-            const res = source?.value
-                ? await this.api.getFeed(source.value, 10)
-                : await this.api.getTimeline(10);
+            this.cursors[sourceKey] = null;
+            const res = await this.fetchTimelinePage(source, sourceKey, 10, false);
             if (this.timelineInfo().sourceKey !== sourceKey) return false;
             const feed = await this.processTimelineFeed(res.data.feed || []);
             const nextTop = feed.find(item => item.post?.uri)?.post?.uri || '';
@@ -280,6 +346,8 @@ class ViewLoader {
         } catch (e) {
             console.warn('hasNewTimelineItems:', e);
             return false;
+        } finally {
+            this.cursors[sourceKey] = savedCursor;
         }
     }
      
