@@ -477,6 +477,7 @@ class ViewLoader {
             });
             const fresh = isAppend ? visibleNotifs.filter(n => !existing.has(this.notificationId(n))) : visibleNotifs;
             this.notificationItems = isAppend ? this.notificationItems.concat(fresh) : fresh;
+            ctx.rememberNotificationIds?.(this.notificationItems.map(n => this.notificationId(n)).filter(Boolean));
 
             const uris = [...new Set(this.notificationItems
                 .filter(n => (n.reason === 'like' || n.reason === 'repost') && n.reasonSubject)

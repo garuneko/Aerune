@@ -139,6 +139,7 @@ const getRenderContext = () => ({
     shouldMutePost,
     isLocalListMember,
     setNotificationBadge,
+    rememberNotificationIds,
     showToast,
 });
 
@@ -150,6 +151,7 @@ const LOCAL_LIST_SOURCE_VALUE = '__aerune_local_list__';
 const timelineSourceKey = () => feedState.selectedLocalList ? 'local-list' : (feedState.selectedFeed?.value ? `feed:${feedState.selectedFeed.value}` : 'home');
 const localListKey = () => accountKey('aerune_local_list_members');
 const notificationUnreadKey = () => accountKey('aerune_notif_unread_count');
+const recentNotificationIdsKey = () => accountKey('aerune_recent_notification_ids');
 
 function normalizeLocalListMember(member) {
     if (!member || typeof member !== 'object' || !member.did) return null;
@@ -324,6 +326,33 @@ function setNotificationBadge(count) {
     if (!els.notifBadge) return;
     els.notifBadge.textContent = safeCount > 99 ? '99+' : (safeCount > 0 ? String(safeCount) : '');
     els.notifBadge.classList.toggle('hidden', safeCount === 0);
+}
+
+function readRecentNotificationIds() {
+    try {
+        const raw = localStorage.getItem(recentNotificationIdsKey());
+        const ids = raw ? JSON.parse(raw) : [];
+        return Array.isArray(ids) ? ids.filter(Boolean).map(String) : [];
+    } catch {
+        return [];
+    }
+}
+
+function notificationFingerprint(n) {
+    if (viewLoader?.notificationId) return viewLoader.notificationId(n);
+    return [n?.uri, n?.cid, n?.indexedAt, n?.author?.did, n?.reason, n?.reasonSubject].filter(Boolean).join('|');
+}
+
+function rememberNotificationIds(ids) {
+    const merged = [];
+    const seen = new Set();
+    for (const id of ids || []) {
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        merged.push(id);
+        if (merged.length >= 80) break;
+    }
+    try { localStorage.setItem(recentNotificationIdsKey(), JSON.stringify(merged)); } catch {}
 }
 
 function showToast(title, body = '') {
@@ -2796,13 +2825,24 @@ async function syncBookmarksData() {
 
 async function checkNotifs() {
     try {
-        const r = await api.countUnreadNotifications();
-        const count = Number(r.data.count) || 0;
+        const [countRes, listRes] = await Promise.all([
+            api.countUnreadNotifications(),
+            api.listNotifications(10).catch(() => ({ data: { notifications: [] } }))
+        ]);
+        const count = Number(countRes.data.count) || 0;
         const prevRaw = localStorage.getItem(notificationUnreadKey());
         const prev = prevRaw == null ? count : Number(prevRaw) || 0;
+        const previousIdsRaw = localStorage.getItem(recentNotificationIdsKey());
+        const previousIds = readRecentNotificationIds();
+        const previousSet = new Set(previousIds);
+        const latestNotifs = Array.isArray(listRes.data.notifications) ? listRes.data.notifications : [];
+        const latestIds = latestNotifs.map(notificationFingerprint).filter(Boolean);
+        const newIds = previousIdsRaw == null ? [] : latestIds.filter(id => !previousSet.has(id));
         setNotificationBadge(count);
-        if (prevRaw != null && count > prev && _activeView !== els.notifDiv) {
-            showToast(t('notif_toast_title'), t('notif_toast_body', String(count - prev)));
+        rememberNotificationIds([...latestIds, ...previousIds]);
+        const toastCount = count > prev ? count - prev : newIds.length;
+        if (toastCount > 0 && _activeView !== els.notifDiv) {
+            showToast(t('notif_toast_title'), t('notif_toast_body', String(toastCount)));
         }
     } catch {}
 }
