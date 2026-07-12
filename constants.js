@@ -295,4 +295,108 @@ translations.ar = {
     login_empty:"أدخل المعرّف وكلمة المرور.",login_app_pw_req:"يتطلب Aerune كلمة مرور تطبيق من إعدادات Bluesky الرسمية.\n(كلمة المرور العادية لن تعمل.)\n\nهل تريد فتح المتصفح للإعدادات؟",login_invalid:"المعرّف أو كلمة المرور غير صحيحة.\nتحقق من الإدخال.",login_rate_limit:"تم تجاوز حد المحاولات.\nانتظر قليلًا ثم حاول مرة أخرى.",login_network:"حدث خطأ في الشبكة.\nتحقق من الاتصال.",login_unknown:"هل تريد فتح المتصفح للتحقق؟"
 };
 
+Object.assign(translations.ja, {
+    watermark_title:"透かし / 署名スタンプ",
+    watermark_enabled:"投稿画像に透かしを入れる",
+    watermark_mode:"種類",
+    watermark_mode_text:"テキスト",
+    watermark_mode_image:"透過画像",
+    watermark_select_image:"画像を選択",
+    watermark_remove_image:"画像を削除",
+    watermark_no_image:"画像未設定",
+    watermark_text:"テキスト",
+    watermark_text_placeholder:"@handle や copyright",
+    watermark_position:"位置",
+    watermark_position_top_left:"左上",
+    watermark_position_top_right:"右上",
+    watermark_position_bottom_left:"左下",
+    watermark_position_bottom_right:"右下",
+    watermark_position_center:"中央",
+    watermark_size:"サイズ",
+    watermark_opacity:"不透明度",
+    watermark_color:"文字色",
+    watermark_shadow:"縁取り / 影",
+    watermark_image_saved:"透かし画像を保存しました。",
+    watermark_image_cleared:"透かし画像を削除しました。",
+    watermark_invalid_image:"画像ファイルを選択してください。"
+});
+
+Object.assign(translations.en, {
+    watermark_title:"Watermark / Signature Stamp",
+    watermark_enabled:"Apply watermark to post images",
+    watermark_mode:"Type",
+    watermark_mode_text:"Text",
+    watermark_mode_image:"Transparent image",
+    watermark_select_image:"Choose image",
+    watermark_remove_image:"Remove image",
+    watermark_no_image:"No image selected",
+    watermark_text:"Text",
+    watermark_text_placeholder:"@handle or copyright",
+    watermark_position:"Position",
+    watermark_position_top_left:"Top left",
+    watermark_position_top_right:"Top right",
+    watermark_position_bottom_left:"Bottom left",
+    watermark_position_bottom_right:"Bottom right",
+    watermark_position_center:"Center",
+    watermark_size:"Size",
+    watermark_opacity:"Opacity",
+    watermark_color:"Text color",
+    watermark_shadow:"Outline / shadow",
+    watermark_image_saved:"Watermark image saved.",
+    watermark_image_cleared:"Watermark image removed.",
+    watermark_invalid_image:"Please choose an image file."
+});
+
+Object.assign(translations['pt-BR'], {
+    watermark_title:"Marca d'água / assinatura",
+    watermark_enabled:"Aplicar marca d'água às imagens",
+    watermark_mode:"Tipo",
+    watermark_mode_text:"Texto",
+    watermark_mode_image:"Imagem transparente",
+    watermark_select_image:"Escolher imagem",
+    watermark_remove_image:"Remover imagem",
+    watermark_no_image:"Nenhuma imagem selecionada",
+    watermark_text:"Texto",
+    watermark_text_placeholder:"@handle ou copyright",
+    watermark_position:"Posição",
+    watermark_position_top_left:"Superior esquerda",
+    watermark_position_top_right:"Superior direita",
+    watermark_position_bottom_left:"Inferior esquerda",
+    watermark_position_bottom_right:"Inferior direita",
+    watermark_position_center:"Centro",
+    watermark_size:"Tamanho",
+    watermark_opacity:"Opacidade",
+    watermark_color:"Cor do texto",
+    watermark_shadow:"Contorno / sombra",
+    watermark_image_saved:"Imagem da marca d'água salva.",
+    watermark_image_cleared:"Imagem da marca d'água removida.",
+    watermark_invalid_image:"Escolha um arquivo de imagem."
+});
+
+Object.assign(translations.ar, {
+    watermark_title:"علامة مائية / توقيع",
+    watermark_enabled:"تطبيق علامة مائية على صور المنشور",
+    watermark_mode:"النوع",
+    watermark_mode_text:"نص",
+    watermark_mode_image:"صورة شفافة",
+    watermark_select_image:"اختيار صورة",
+    watermark_remove_image:"إزالة الصورة",
+    watermark_no_image:"لم يتم اختيار صورة",
+    watermark_text:"النص",
+    watermark_text_placeholder:"@handle أو copyright",
+    watermark_position:"الموضع",
+    watermark_position_top_left:"أعلى اليسار",
+    watermark_position_top_right:"أعلى اليمين",
+    watermark_position_bottom_left:"أسفل اليسار",
+    watermark_position_bottom_right:"أسفل اليمين",
+    watermark_position_center:"الوسط",
+    watermark_size:"الحجم",
+    watermark_opacity:"الشفافية",
+    watermark_color:"لون النص",
+    watermark_shadow:"حد / ظل",
+    watermark_image_saved:"تم حفظ صورة العلامة المائية.",
+    watermark_image_cleared:"تمت إزالة صورة العلامة المائية.",
+    watermark_invalid_image:"اختر ملف صورة."
+});
+
 module.exports = { SVG_ICONS, ICON_CACHE, translations };

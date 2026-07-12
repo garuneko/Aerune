@@ -982,6 +982,86 @@ body[data-font-size="2"] .msg-bubble { font-size: 20px; }
     padding: 8px;
     background: #fff;
 }
+.settings-field input[type="text"],
+.settings-field input[type="color"] {
+    min-width: 180px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 8px;
+    background: #fff;
+}
+.settings-field input[type="color"] {
+    width: 56px;
+    min-width: 56px;
+    height: 36px;
+    padding: 3px;
+}
+.settings-range-field {
+    display: grid;
+    grid-template-columns: minmax(120px, 1fr) minmax(160px, 220px) 48px;
+}
+.settings-range-field input[type="range"] { width: 100%; }
+.settings-value-label {
+    color: var(--text-sub);
+    font-size: 12px;
+    font-weight: 800;
+    text-align: right;
+}
+.watermark-image-settings,
+.watermark-text-settings { display: flex; }
+.settings-watermark-panel.is-image-mode .watermark-text-settings { display: none; }
+.settings-watermark-panel.is-text-mode .watermark-image-settings { display: none; }
+.watermark-image-settings {
+    flex-direction: column;
+    gap: 10px;
+    margin: 10px 0;
+}
+.watermark-image-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.watermark-image-actions button {
+    border: 1px solid var(--border-color);
+    background: #fff;
+    border-radius: 8px;
+    padding: 7px 10px;
+    cursor: pointer;
+    font-weight: 800;
+}
+.watermark-image-actions button:disabled {
+    opacity: .5;
+    cursor: default;
+}
+.watermark-image-preview-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-sub);
+    font-size: 13px;
+}
+#setting-watermark-image-preview {
+    width: 72px;
+    height: 72px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    object-fit: contain;
+    background: #f8fafc;
+}
+@media (max-width: 720px) {
+    .settings-field,
+    .settings-range-field {
+        display: flex;
+        align-items: stretch;
+        flex-direction: column;
+    }
+    .settings-field select,
+    .settings-field input[type="text"] {
+        width: 100%;
+        min-width: 0;
+    }
+    .settings-value-label { text-align: left; }
+}
 .settings-account-list {
     display: flex;
     flex-direction: column;

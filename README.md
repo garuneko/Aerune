@@ -24,6 +24,10 @@ sudo xattr -rd com.apple.quarantine "/Applications/Aerune.app"
 - **Windows**: Windows 10以降
 - **macOS**: macOS 11 (Big Sur) 以降
 
+## 画像透かし
+
+Electron版では、投稿画像に透過PNGまたはテキストの透かしを合成できます。設定画面で位置、サイズ、不透明度、文字色、影を指定できます。元のローカル画像ファイルは変更せず、投稿用の画像データだけを生成します。
+
 ## 動画圧縮
 
 Electron版には、macOS arm64向けの動画圧縮機能を含みます。Windows x64では、監査済みLGPL構成のFFmpegを `vendor/ffmpeg/win32-x64/ffmpeg.exe`（開発時）または `Resources/bin/ffmpeg/win32-x64/ffmpeg.exe`（配布時）に配置した場合に同じ圧縮経路を使用します。
@@ -89,6 +93,10 @@ sudo xattr -rd com.apple.quarantine "/Applications/Aerune.app"
 
 - **Windows**: Windows 10 or later
 - **macOS**: macOS 11 (Big Sur) or later
+
+## Image Watermarking
+
+The Electron version can apply a transparent PNG or text watermark to post images. Settings include position, size, opacity, text color, and shadow. Aerune does not modify the original local image file; it only generates image data for posting.
 
 ## Video Compression
 

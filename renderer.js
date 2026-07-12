@@ -22,7 +22,7 @@ const els = {};
 let savedAccounts = [], currentDid = null;
 let selectedImages = [], replyTarget = null, quoteTarget = null;
 let selectedVideo = null, isPosting = false, postAbortController = null;
-let autoQuoteUrl = null, quoteResolveTimer = null, draftSaveTimer = null;
+let autoQuoteUrl = null, quoteResolveTimer = null, draftSaveTimer = null, watermarkRefreshTimer = null;
 let activeCompressionJobId = null;
 let currentConvoId = null;
 const searchState = {
@@ -47,6 +47,11 @@ const chatState = {
 let notifTimer = null;
 let imageModalState = { urls: [], index: 0 };
 let reportDialogFinish = null;
+let watermarkSettings = null;
+let watermarkImageBlob = null;
+let watermarkImageUrl = '';
+let watermarkImageName = '';
+let watermarkRenderToken = 0;
 window.aeruneBookmarks = new Set();
 
 const feedState = {
@@ -108,6 +113,17 @@ const timelineState = {
 };
 const VIDEO_UPLOAD_MAX_BYTES = 100000000;
 const VIDEO_COMPRESSION_TARGET_BYTES = 95000000;
+const WATERMARK_DEFAULTS = Object.freeze({
+    enabled: false,
+    mode: 'text',
+    text: '',
+    position: 'bottom-right',
+    size: 18,
+    opacity: 40,
+    color: '#ffffff',
+    shadow: true
+});
+const WATERMARK_POSITIONS = new Set(['top-left', 'top-right', 'bottom-left', 'bottom-right', 'center']);
 
 // ─── i18n ────────────────────────────────────────────────────────
 const t = (key, ...args) => {
@@ -165,6 +181,29 @@ const notificationUnreadKey = () => accountKey('aerune_notif_unread_count');
 const recentNotificationIdsKey = () => accountKey('aerune_recent_notification_ids');
 const discoveryDismissedKey = () => accountKey('aerune_discovery_dismissed');
 const discoveryCacheKey = () => accountKey('aerune_discovery_candidates');
+const watermarkSettingsKey = () => accountKey('aerune_watermark_settings');
+const watermarkImageKey = () => accountKey('aerune_watermark_image');
+
+function normalizeWatermarkSettings(value = {}) {
+    const src = value && typeof value === 'object' ? value : {};
+    const size = Number(src.size);
+    const opacity = Number(src.opacity);
+    const color = String(src.color || WATERMARK_DEFAULTS.color);
+    return {
+        enabled: !!src.enabled,
+        mode: src.mode === 'image' ? 'image' : 'text',
+        text: String(src.text || ''),
+        position: WATERMARK_POSITIONS.has(src.position) ? src.position : WATERMARK_DEFAULTS.position,
+        size: Math.min(50, Math.max(5, Number.isFinite(size) ? Math.round(size) : WATERMARK_DEFAULTS.size)),
+        opacity: Math.min(100, Math.max(0, Number.isFinite(opacity) ? Math.round(opacity) : WATERMARK_DEFAULTS.opacity)),
+        color: /^#[0-9a-fA-F]{6}$/.test(color) ? color : WATERMARK_DEFAULTS.color,
+        shadow: src.shadow !== false
+    };
+}
+
+function activeWatermarkSettings() {
+    return watermarkSettings || normalizeWatermarkSettings(WATERMARK_DEFAULTS);
+}
 
 function normalizeLocalListMember(member) {
     if (!member || typeof member !== 'object' || !member.did) return null;
@@ -816,36 +855,363 @@ async function draftStore(mode = 'readonly') {
     return db.transaction('drafts', mode).objectStore('drafts');
 }
 
-async function getDraft() {
+async function getDraftValue(key) {
     const store = await draftStore();
     return await new Promise((resolve, reject) => {
-        const req = store.get(postDraftKey());
+        const req = store.get(key);
         req.onsuccess = () => resolve(req.result || null);
         req.onerror = () => reject(req.error);
     });
 }
 
-async function putDraft(draft) {
+async function putDraftValue(key, value) {
     const store = await draftStore('readwrite');
     return await new Promise((resolve, reject) => {
-        const req = store.put(draft, postDraftKey());
+        const req = store.put(value, key);
         req.onsuccess = () => resolve();
         req.onerror = () => reject(req.error);
     });
 }
 
+async function deleteDraftValue(key) {
+    const store = await draftStore('readwrite');
+    return await new Promise((resolve, reject) => {
+        const req = store.delete(key);
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+    });
+}
+
+async function getDraft() {
+    return await getDraftValue(postDraftKey());
+}
+
+async function putDraft(draft) {
+    return await putDraftValue(postDraftKey(), draft);
+}
+
 async function deleteDraft() {
     localStorage.removeItem('aerune_draft_text');
     try {
-        const store = await draftStore('readwrite');
-        await new Promise((resolve, reject) => {
-            const req = store.delete(postDraftKey());
-            req.onsuccess = () => resolve();
-            req.onerror = () => reject(req.error);
-        });
+        await deleteDraftValue(postDraftKey());
     } catch (e) {
         console.warn('deleteDraft:', e);
     }
+}
+
+function saveWatermarkSettings() {
+    if (!currentDid) return;
+    watermarkSettings = normalizeWatermarkSettings(activeWatermarkSettings());
+    localStorage.setItem(watermarkSettingsKey(), JSON.stringify(watermarkSettings));
+}
+
+function loadWatermarkSettings() {
+    let parsed = null;
+    try {
+        const raw = localStorage.getItem(watermarkSettingsKey());
+        parsed = raw ? JSON.parse(raw) : null;
+    } catch {}
+    watermarkSettings = normalizeWatermarkSettings(parsed || WATERMARK_DEFAULTS);
+}
+
+async function loadWatermarkImage() {
+    if (watermarkImageUrl) URL.revokeObjectURL(watermarkImageUrl);
+    watermarkImageBlob = null;
+    watermarkImageUrl = '';
+    watermarkImageName = '';
+    try {
+        const stored = await getDraftValue(watermarkImageKey());
+        const blob = stored?.blob instanceof Blob ? stored.blob : null;
+        if (!blob) return;
+        watermarkImageBlob = blob;
+        watermarkImageName = String(stored.name || '');
+        watermarkImageUrl = URL.createObjectURL(blob);
+    } catch (e) {
+        console.warn('loadWatermarkImage:', e);
+    }
+}
+
+async function loadWatermarkPreferences() {
+    loadWatermarkSettings();
+    await loadWatermarkImage();
+    renderWatermarkSettings();
+}
+
+function canApplyWatermark(settings = activeWatermarkSettings()) {
+    if (!settings.enabled) return false;
+    if (settings.mode === 'image') return !!watermarkImageBlob;
+    return !!settings.text.trim();
+}
+
+function readWatermarkSettingsFromControls() {
+    const enabled = document.getElementById('setting-watermark-enabled');
+    const mode = document.getElementById('setting-watermark-mode');
+    const text = document.getElementById('setting-watermark-text');
+    const position = document.getElementById('setting-watermark-position');
+    const size = document.getElementById('setting-watermark-size');
+    const opacity = document.getElementById('setting-watermark-opacity');
+    const color = document.getElementById('setting-watermark-color');
+    const shadow = document.getElementById('setting-watermark-shadow');
+    return normalizeWatermarkSettings({
+        enabled: enabled?.checked ?? activeWatermarkSettings().enabled,
+        mode: mode?.value || activeWatermarkSettings().mode,
+        text: text?.value ?? activeWatermarkSettings().text,
+        position: position?.value || activeWatermarkSettings().position,
+        size: size?.value ?? activeWatermarkSettings().size,
+        opacity: opacity?.value ?? activeWatermarkSettings().opacity,
+        color: color?.value || activeWatermarkSettings().color,
+        shadow: shadow?.checked ?? activeWatermarkSettings().shadow
+    });
+}
+
+function updateWatermarkLabels() {
+    const settings = activeWatermarkSettings();
+    const sizeLabel = document.getElementById('setting-watermark-size-value');
+    const opacityLabel = document.getElementById('setting-watermark-opacity-value');
+    const panel = document.getElementById('settings-watermark-panel');
+    if (sizeLabel) sizeLabel.textContent = `${settings.size}%`;
+    if (opacityLabel) opacityLabel.textContent = `${settings.opacity}%`;
+    panel?.classList.toggle('is-image-mode', settings.mode === 'image');
+    panel?.classList.toggle('is-text-mode', settings.mode !== 'image');
+}
+
+function renderWatermarkSettings() {
+    const panel = document.getElementById('settings-watermark-panel');
+    if (!panel) return;
+    const settings = activeWatermarkSettings();
+    const enabled = document.getElementById('setting-watermark-enabled');
+    const mode = document.getElementById('setting-watermark-mode');
+    const text = document.getElementById('setting-watermark-text');
+    const position = document.getElementById('setting-watermark-position');
+    const size = document.getElementById('setting-watermark-size');
+    const opacity = document.getElementById('setting-watermark-opacity');
+    const color = document.getElementById('setting-watermark-color');
+    const shadow = document.getElementById('setting-watermark-shadow');
+    const imageName = document.getElementById('setting-watermark-image-name');
+    const imagePreview = document.getElementById('setting-watermark-image-preview');
+    const clearButton = document.querySelector('[data-act="watermark-clear-image"]');
+
+    if (enabled) enabled.checked = settings.enabled;
+    if (mode) mode.value = settings.mode;
+    if (text) text.value = settings.text;
+    if (position) position.value = settings.position;
+    if (size) size.value = String(settings.size);
+    if (opacity) opacity.value = String(settings.opacity);
+    if (color) color.value = settings.color;
+    if (shadow) shadow.checked = settings.shadow;
+    if (imageName) imageName.textContent = watermarkImageName || t('watermark_no_image');
+    if (imagePreview) {
+        imagePreview.src = watermarkImageUrl || '';
+        imagePreview.classList.toggle('hidden', !watermarkImageUrl);
+    }
+    if (clearButton) clearButton.disabled = !watermarkImageBlob;
+    updateWatermarkLabels();
+}
+
+function handleWatermarkControlChange() {
+    watermarkSettings = readWatermarkSettingsFromControls();
+    saveWatermarkSettings();
+    updateWatermarkLabels();
+    scheduleWatermarkRefresh();
+}
+
+function scheduleWatermarkRefresh() {
+    if (watermarkRefreshTimer) clearTimeout(watermarkRefreshTimer);
+    watermarkRefreshTimer = setTimeout(() => {
+        refreshWatermarkedImages({ saveDraft: true }).catch(e => console.warn('refreshWatermarkedImages:', e));
+    }, 350);
+}
+
+async function importWatermarkImageFile(file) {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+        alert(t('watermark_invalid_image'));
+        return;
+    }
+    const blob = file.slice(0, file.size, file.type || 'image/png');
+    await putDraftValue(watermarkImageKey(), { blob, name: file.name || '', type: file.type || 'image/png' });
+    if (watermarkImageUrl) URL.revokeObjectURL(watermarkImageUrl);
+    watermarkImageBlob = blob;
+    watermarkImageName = file.name || '';
+    watermarkImageUrl = URL.createObjectURL(blob);
+    watermarkSettings = normalizeWatermarkSettings({ ...activeWatermarkSettings(), enabled: true, mode: 'image' });
+    saveWatermarkSettings();
+    renderWatermarkSettings();
+    showToast(t('watermark_title'), t('watermark_image_saved'));
+    await refreshWatermarkedImages({ saveDraft: true });
+}
+
+async function clearWatermarkImage() {
+    try {
+        await deleteDraftValue(watermarkImageKey());
+    } catch (e) {
+        console.warn('clearWatermarkImage:', e);
+    }
+    if (watermarkImageUrl) URL.revokeObjectURL(watermarkImageUrl);
+    watermarkImageBlob = null;
+    watermarkImageUrl = '';
+    watermarkImageName = '';
+    if (activeWatermarkSettings().mode === 'image') {
+        watermarkSettings = normalizeWatermarkSettings({ ...activeWatermarkSettings(), enabled: false });
+        saveWatermarkSettings();
+    }
+    renderWatermarkSettings();
+    showToast(t('watermark_title'), t('watermark_image_cleared'));
+    await refreshWatermarkedImages({ saveDraft: true });
+}
+
+async function loadCanvasImage(blob) {
+    if (typeof createImageBitmap === 'function') {
+        try { return await createImageBitmap(blob); }
+        catch {}
+    }
+    return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(blob);
+        const img = new Image();
+        img.onload = () => {
+            URL.revokeObjectURL(url);
+            resolve(img);
+        };
+        img.onerror = () => {
+            URL.revokeObjectURL(url);
+            reject(new Error('Image load failed.'));
+        };
+        img.src = url;
+    });
+}
+
+function releaseCanvasImage(img) {
+    if (img && typeof img.close === 'function') img.close();
+}
+
+function watermarkRect(canvasWidth, canvasHeight, itemWidth, itemHeight, position) {
+    const margin = Math.max(16, Math.round(Math.min(canvasWidth, canvasHeight) * 0.035));
+    switch (position) {
+        case 'top-left': return { x: margin, y: margin };
+        case 'top-right': return { x: canvasWidth - itemWidth - margin, y: margin };
+        case 'bottom-left': return { x: margin, y: canvasHeight - itemHeight - margin };
+        case 'center': return { x: (canvasWidth - itemWidth) / 2, y: (canvasHeight - itemHeight) / 2 };
+        case 'bottom-right':
+        default: return { x: canvasWidth - itemWidth - margin, y: canvasHeight - itemHeight - margin };
+    }
+}
+
+function canvasToJpegBlob(canvas, targetSize = 950000) {
+    return new Promise(resolve => {
+        let quality = 0.86;
+        const encode = () => {
+            canvas.toBlob(blob => {
+                if (blob && blob.size > targetSize && quality > 0.42) {
+                    quality -= 0.08;
+                    encode();
+                } else {
+                    resolve(blob);
+                }
+            }, 'image/jpeg', quality);
+        };
+        encode();
+    });
+}
+
+async function composeWatermark(baseBlob, fallbackWidth = 0, fallbackHeight = 0) {
+    const settings = activeWatermarkSettings();
+    if (!canApplyWatermark(settings)) {
+        return {
+            blob: baseBlob,
+            width: fallbackWidth,
+            height: fallbackHeight
+        };
+    }
+
+    const source = await loadCanvasImage(baseBlob);
+    const width = Math.round(source.width || fallbackWidth || 1);
+    const height = Math.round(source.height || fallbackHeight || 1);
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(source, 0, 0, width, height);
+    releaseCanvasImage(source);
+
+    ctx.save();
+    ctx.globalAlpha = settings.opacity / 100;
+
+    if (settings.mode === 'image' && watermarkImageBlob) {
+        const mark = await loadCanvasImage(watermarkImageBlob);
+        const markWidth = mark.width || 1;
+        const markHeight = mark.height || 1;
+        const maxWidth = Math.max(12, width * settings.size / 100);
+        const maxHeight = Math.max(12, height * settings.size / 100);
+        const scale = Math.min(maxWidth / markWidth, maxHeight / markHeight);
+        const drawWidth = Math.max(1, Math.round(markWidth * scale));
+        const drawHeight = Math.max(1, Math.round(markHeight * scale));
+        const pos = watermarkRect(width, height, drawWidth, drawHeight, settings.position);
+        ctx.drawImage(mark, pos.x, pos.y, drawWidth, drawHeight);
+        releaseCanvasImage(mark);
+    } else {
+        const lines = settings.text.trim().split(/\r?\n/).map(line => line.trim()).filter(Boolean).slice(0, 3);
+        if (lines.length) {
+            const fontSize = Math.max(14, Math.round(Math.min(width, height) * settings.size / 300));
+            const lineHeight = Math.round(fontSize * 1.22);
+            ctx.font = `700 ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+            ctx.textBaseline = 'top';
+            ctx.textAlign = 'left';
+            ctx.direction = RTL_LANGS.has(currentLang) ? 'rtl' : 'ltr';
+            const textWidth = Math.max(...lines.map(line => ctx.measureText(line).width));
+            const textHeight = lineHeight * lines.length;
+            const pos = watermarkRect(width, height, textWidth, textHeight, settings.position);
+            if (settings.shadow) {
+                ctx.shadowColor = 'rgba(0,0,0,.65)';
+                ctx.shadowBlur = Math.max(2, Math.round(fontSize * 0.1));
+                ctx.shadowOffsetX = Math.max(1, Math.round(fontSize * 0.035));
+                ctx.shadowOffsetY = Math.max(1, Math.round(fontSize * 0.035));
+            }
+            ctx.lineWidth = Math.max(2, Math.round(fontSize * 0.08));
+            ctx.strokeStyle = 'rgba(0,0,0,.55)';
+            ctx.fillStyle = settings.color;
+            lines.forEach((line, index) => {
+                const y = pos.y + index * lineHeight;
+                ctx.strokeText(line, pos.x, y);
+                ctx.fillText(line, pos.x, y);
+            });
+        }
+    }
+
+    ctx.restore();
+    const blob = await canvasToJpegBlob(canvas);
+    return { blob: blob || baseBlob, width, height };
+}
+
+async function applyWatermarkToAttachment(attachment) {
+    const baseBlob = attachment.baseBlob || attachment.blob;
+    let result;
+    try {
+        result = await composeWatermark(baseBlob, attachment.width, attachment.height);
+    } catch (e) {
+        console.warn('composeWatermark:', e);
+        result = { blob: baseBlob, width: attachment.width, height: attachment.height };
+    }
+    attachment.baseBlob = baseBlob;
+    attachment.blob = result.blob;
+    attachment.width = result.width || attachment.width;
+    attachment.height = result.height || attachment.height;
+    if (attachment.url) URL.revokeObjectURL(attachment.url);
+    attachment.url = URL.createObjectURL(result.blob);
+    return attachment;
+}
+
+async function refreshWatermarkedImages({ saveDraft = false } = {}) {
+    const token = ++watermarkRenderToken;
+    if (!selectedImages.length) {
+        updateImagePreview();
+        return;
+    }
+    for (const image of selectedImages) {
+        await applyWatermarkToAttachment(image);
+        if (token !== watermarkRenderToken) return;
+    }
+    updateImagePreview();
+    if (saveDraft) scheduleDraftSave();
 }
 
 function scheduleDraftSave() {
@@ -869,7 +1235,7 @@ async function saveDraftNow() {
         quoteTarget,
         autoQuoteUrl,
         images: selectedImages.map(img => ({
-            blob: img.blob,
+            blob: img.baseBlob || img.blob,
             width: img.width,
             height: img.height,
             alt: img.alt || ''
@@ -918,6 +1284,7 @@ async function restoreDraftForCurrentAccount() {
         selectedImages = (draft.images || []).map((img, idx) => ({
             id: Date.now() + idx,
             file: null,
+            baseBlob: img.blob,
             blob: img.blob,
             width: img.width,
             height: img.height,
@@ -931,6 +1298,7 @@ async function restoreDraftForCurrentAccount() {
                 url: URL.createObjectURL(draft.video.blob)
             };
         }
+        await refreshWatermarkedImages({ saveDraft: false });
         updateImagePreview();
         updateVideoPreview();
         renderQuotePreview();
@@ -2869,6 +3237,16 @@ function installDelegates() {
                 clearAppCache();
                 return;
             }
+            case 'watermark-pick-image': {
+                e.preventDefault(); e.stopPropagation();
+                document.getElementById('setting-watermark-image-input')?.click();
+                return;
+            }
+            case 'watermark-clear-image': {
+                e.preventDefault(); e.stopPropagation();
+                clearWatermarkImage().catch(err => alert(err.message || err));
+                return;
+            }
             case 'chat-load-convos': {
                 e.preventDefault(); e.stopPropagation();
                 fetchConvos(true);
@@ -3029,12 +3407,22 @@ function installDelegates() {
     }, true);
 
     document.addEventListener('input', e => {
+        if (e.target.closest('#settings-watermark-panel') && e.target.matches('input:not([type="file"]), select')) {
+            handleWatermarkControlChange();
+            return;
+        }
         const input = e.target.closest('input[data-alt-idx]');
         if (!input) return;
         const idx = parseInt(input.dataset.altIdx, 10);
         if (!Number.isInteger(idx) || !selectedImages[idx]) return;
         selectedImages[idx].alt = input.value;
         scheduleDraftSave();
+    });
+
+    document.addEventListener('change', e => {
+        if (e.target.closest('#settings-watermark-panel') && e.target.matches('input:not([type="file"]), select')) {
+            handleWatermarkControlChange();
+        }
     });
 
     document.addEventListener('dblclick', e => {
@@ -3174,6 +3562,7 @@ function refreshLocalizedDynamicUi() {
     renderMuteRulesList();
     renderSettingsAccounts();
     renderLocalListSettings();
+    renderWatermarkSettings();
     updateVideoPreview();
     renderQuotePreview();
 }
@@ -3219,7 +3608,18 @@ async function processIncomingImages(files) {
     for (const f of files) {
         if (selectedImages.length >= 4) break;
         const c = await compressImage(f);
-        selectedImages.push({ id: Date.now() + Math.random(), file: f, url: URL.createObjectURL(f), blob: c.blob, width: c.width, height: c.height, alt: '' });
+        const attachment = {
+            id: Date.now() + Math.random(),
+            file: f,
+            baseBlob: c.blob,
+            blob: c.blob,
+            width: c.width,
+            height: c.height,
+            alt: '',
+            url: ''
+        };
+        await applyWatermarkToAttachment(attachment);
+        selectedImages.push(attachment);
     }
     updateImagePreview();
     scheduleDraftSave();
@@ -3395,6 +3795,7 @@ async function switchAccount(did) {
             setNotificationBadge(Number(savedUnread) || 0);
         }
         await syncMuteRulesFromServer();
+        await loadWatermarkPreferences();
         api.configureSubscribedLabelers().catch(e => console.warn('configureSubscribedLabelers:', e));
         stopTimelinePolling();
         resetTimelineNotice();
@@ -4148,6 +4549,62 @@ async function initApp() {
         }
     }
 
+    if (els.settingsView && !get('settings-watermark-panel')) {
+        const panel = document.createElement('div');
+        panel.id = 'settings-watermark-panel';
+        panel.className = 'settings-panel settings-watermark-panel';
+        panel.innerHTML =
+            `<div class="settings-panel-title" data-i18n="watermark_title">${t('watermark_title')}</div>` +
+            `<label class="settings-check"><input type="checkbox" id="setting-watermark-enabled"> <span data-i18n="watermark_enabled">${t('watermark_enabled')}</span></label>` +
+            `<label class="settings-field"><span data-i18n="watermark_mode">${t('watermark_mode')}</span>` +
+            `<select id="setting-watermark-mode">` +
+            `<option value="text" data-i18n="watermark_mode_text">${t('watermark_mode_text')}</option>` +
+            `<option value="image" data-i18n="watermark_mode_image">${t('watermark_mode_image')}</option>` +
+            `</select></label>` +
+            `<div class="watermark-image-settings">` +
+            `<div class="watermark-image-actions">` +
+            `<button type="button" data-act="watermark-pick-image" data-i18n="watermark_select_image">${t('watermark_select_image')}</button>` +
+            `<button type="button" data-act="watermark-clear-image" class="danger-action" data-i18n="watermark_remove_image">${t('watermark_remove_image')}</button>` +
+            `<input type="file" id="setting-watermark-image-input" accept="image/png,image/*" class="hidden">` +
+            `</div>` +
+            `<div class="watermark-image-preview-row">` +
+            `<img id="setting-watermark-image-preview" class="hidden" alt="">` +
+            `<span id="setting-watermark-image-name"></span>` +
+            `</div>` +
+            `</div>` +
+            `<label class="settings-field watermark-text-settings"><span data-i18n="watermark_text">${t('watermark_text')}</span>` +
+            `<input id="setting-watermark-text" type="text" data-i18n-placeholder="watermark_text_placeholder" placeholder="${escAttr(t('watermark_text_placeholder'))}">` +
+            `</label>` +
+            `<label class="settings-field"><span data-i18n="watermark_position">${t('watermark_position')}</span>` +
+            `<select id="setting-watermark-position">` +
+            `<option value="top-left" data-i18n="watermark_position_top_left">${t('watermark_position_top_left')}</option>` +
+            `<option value="top-right" data-i18n="watermark_position_top_right">${t('watermark_position_top_right')}</option>` +
+            `<option value="bottom-left" data-i18n="watermark_position_bottom_left">${t('watermark_position_bottom_left')}</option>` +
+            `<option value="bottom-right" data-i18n="watermark_position_bottom_right">${t('watermark_position_bottom_right')}</option>` +
+            `<option value="center" data-i18n="watermark_position_center">${t('watermark_position_center')}</option>` +
+            `</select></label>` +
+            `<label class="settings-field settings-range-field"><span data-i18n="watermark_size">${t('watermark_size')}</span>` +
+            `<input id="setting-watermark-size" type="range" min="5" max="50" step="1">` +
+            `<span id="setting-watermark-size-value" class="settings-value-label"></span>` +
+            `</label>` +
+            `<label class="settings-field settings-range-field"><span data-i18n="watermark_opacity">${t('watermark_opacity')}</span>` +
+            `<input id="setting-watermark-opacity" type="range" min="0" max="100" step="5">` +
+            `<span id="setting-watermark-opacity-value" class="settings-value-label"></span>` +
+            `</label>` +
+            `<label class="settings-field"><span data-i18n="watermark_color">${t('watermark_color')}</span>` +
+            `<input id="setting-watermark-color" type="color">` +
+            `</label>` +
+            `<label class="settings-check"><input type="checkbox" id="setting-watermark-shadow"> <span data-i18n="watermark_shadow">${t('watermark_shadow')}</span></label>`;
+        const displayPanel = get('settings-display-panel');
+        if (displayPanel?.nextElementSibling) {
+            displayPanel.parentNode.insertBefore(panel, displayPanel.nextElementSibling);
+        } else if (displayPanel) {
+            displayPanel.parentNode.appendChild(panel);
+        } else {
+            els.settingsView.appendChild(panel);
+        }
+    }
+
     if (els.settingsView && !get('settings-accounts-panel')) {
         const panel = document.createElement('div');
         panel.id = 'settings-accounts-panel';
@@ -4289,6 +4746,7 @@ async function initApp() {
     renderMuteRulesList();
     renderSettingsAccounts();
     renderLocalListSettings();
+    renderWatermarkSettings();
 
     applyTranslations();
 
@@ -4387,7 +4845,7 @@ async function initApp() {
         );
     });
 
-    get('settings-save-btn')?.addEventListener('click', () => {
+    get('settings-save-btn')?.addEventListener('click', async () => {
         const nl  = normalizeLanguage(get('setting-lang')?.value || currentLang);
         const nb  = get('setting-nsfw')?.checked ?? nsfwBlur;
         const nbm = get('setting-bookmark-tab')?.checked ?? showBookmarksConfig;
@@ -4396,6 +4854,7 @@ async function initApp() {
         const nrs = get('setting-restore-scroll')?.checked ?? restoreScrollEnabled;
         const nis = get('setting-image-display-style')?.value || window.aeruneImageDisplayStyle || 'carousel';
         const nfl = clampFontSizeLevel(get('setting-font-size-level')?.value ?? fontSizeLevel);
+        watermarkSettings = readWatermarkSettingsFromControls();
 
         localStorage.setItem('aerune_lang',           nl);
         localStorage.setItem('aerune_nsfw_blur',      nb.toString());
@@ -4413,9 +4872,11 @@ async function initApp() {
         window.aeruneTimeFormat = ntf;
         window.aeruneImageDisplayStyle = nis;
         saveMuteWordsFromSettings();
+        saveWatermarkSettings();
         
         get('nav-bookmarks')?.style.setProperty('display', nbm ? 'block' : 'none');
         applyTranslations();
+        await refreshWatermarkedImages({ saveDraft: true });
         if (autoRefreshEnabled) startTimelinePolling();
         else {
             stopTimelinePolling();
@@ -4437,6 +4898,15 @@ async function initApp() {
     get('quote-modal-close')?.addEventListener('click', () => els.quoteModal?.classList.add('hidden'));
     get('image-input')?.addEventListener('change', async e => { await processIncomingImages(Array.from(e.target.files)); e.target.value = ''; });
     get('video-input')?.addEventListener('change', async e => { await processVideoFile(e.target.files?.[0]); e.target.value = ''; });
+    get('setting-watermark-image-input')?.addEventListener('change', async e => {
+        try {
+            await importWatermarkImageFile(e.target.files?.[0]);
+        } catch (err) {
+            alert(err.message || err);
+        } finally {
+            e.target.value = '';
+        }
+    });
 
     get('chat-send-btn')?.addEventListener('click', sendChatMessage);
     get('chat-msg-input')?.addEventListener('keydown', e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); sendChatMessage(); } });
