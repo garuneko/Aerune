@@ -11,7 +11,8 @@ const SVG_ICONS = {
     quote:  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2zM13 8l-3 3 3 3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
     bookmark:`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
     image:  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><path d="M7.5 14l2.5-2.8 3.2 3.6 2.2-2.4 2.6 2.9"/><path d="M12 4.5v6"/><path d="M9.8 7l2.2-2.2L14.2 7"/></svg>`,
-    video:  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect x="3.5" y="6" width="12.5" height="12" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M16 10.2l4.5-2.5v8.6L16 13.8z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`
+    video:  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect x="3.5" y="6" width="12.5" height="12" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M16 10.2l4.5-2.5v8.6L16 13.8z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`,
+    stamp:  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 12V9a4 4 0 0 1 8 0v3l2 2v2H6v-2l2-2Z"/><path d="M5 20h14M9 16v4M15 16v4"/></svg>`
 };
 
 // 事前に生成済みのHTML文字列をキャッシュ
@@ -297,6 +298,10 @@ translations.ar = {
 
 Object.assign(translations.ja, {
     watermark_title:"透かし / 署名スタンプ",
+    watermark_feature:"透かし",
+    watermark_preview:"ライブプレビュー",
+    watermark_preview_on:"投稿画像に適用されます",
+    watermark_preview_off:"現在はオフです",
     watermark_enabled:"投稿画像に透かしを入れる",
     watermark_mode:"種類",
     watermark_mode_text:"テキスト",
@@ -323,6 +328,10 @@ Object.assign(translations.ja, {
 
 Object.assign(translations.en, {
     watermark_title:"Watermark / Signature Stamp",
+    watermark_feature:"Watermark",
+    watermark_preview:"Live preview",
+    watermark_preview_on:"Will be applied to post images",
+    watermark_preview_off:"Currently off",
     watermark_enabled:"Apply watermark to post images",
     watermark_mode:"Type",
     watermark_mode_text:"Text",
@@ -349,6 +358,10 @@ Object.assign(translations.en, {
 
 Object.assign(translations['pt-BR'], {
     watermark_title:"Marca d'água / assinatura",
+    watermark_feature:"Marca d'água",
+    watermark_preview:"Prévia ao vivo",
+    watermark_preview_on:"Será aplicada às imagens do post",
+    watermark_preview_off:"Atualmente desativada",
     watermark_enabled:"Aplicar marca d'água às imagens",
     watermark_mode:"Tipo",
     watermark_mode_text:"Texto",
@@ -375,6 +388,10 @@ Object.assign(translations['pt-BR'], {
 
 Object.assign(translations.ar, {
     watermark_title:"علامة مائية / توقيع",
+    watermark_feature:"علامة مائية",
+    watermark_preview:"معاينة مباشرة",
+    watermark_preview_on:"سيتم تطبيقها على صور المنشور",
+    watermark_preview_off:"متوقفة حاليًا",
     watermark_enabled:"تطبيق علامة مائية على صور المنشور",
     watermark_mode:"النوع",
     watermark_mode_text:"نص",

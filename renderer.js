@@ -52,6 +52,8 @@ let watermarkImageBlob = null;
 let watermarkImageUrl = '';
 let watermarkImageName = '';
 let watermarkRenderToken = 0;
+let watermarkPreviewToken = 0;
+let watermarkPreviewSampleBlob = null;
 window.aeruneBookmarks = new Set();
 
 const feedState = {
@@ -1006,12 +1008,79 @@ function renderWatermarkSettings() {
     }
     if (clearButton) clearButton.disabled = !watermarkImageBlob;
     updateWatermarkLabels();
+    renderWatermarkShortcut();
+    renderWatermarkLivePreview();
+}
+
+function renderWatermarkShortcut() {
+    const button = document.getElementById('watermark-shortcut-btn');
+    if (!button) return;
+    const active = canApplyWatermark();
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    button.title = active ? t('watermark_preview_on') : t('watermark_preview_off');
+}
+
+async function getWatermarkPreviewSample() {
+    if (watermarkPreviewSampleBlob) return watermarkPreviewSampleBlob;
+    const canvas = document.createElement('canvas');
+    canvas.width = 720;
+    canvas.height = 405;
+    const ctx = canvas.getContext('2d');
+    const sky = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    sky.addColorStop(0, '#74c7ff');
+    sky.addColorStop(0.62, '#dff4ff');
+    sky.addColorStop(1, '#f7d6a2');
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = 'rgba(255,255,255,.72)';
+    ctx.beginPath();
+    ctx.arc(590, 90, 42, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#5f8f78';
+    ctx.beginPath();
+    ctx.moveTo(0, 330);
+    ctx.quadraticCurveTo(180, 210, 355, 330);
+    ctx.quadraticCurveTo(520, 220, 720, 320);
+    ctx.lineTo(720, 405);
+    ctx.lineTo(0, 405);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#315f52';
+    ctx.fillRect(0, 355, canvas.width, 50);
+    watermarkPreviewSampleBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', .9));
+    return watermarkPreviewSampleBlob;
+}
+
+async function renderWatermarkLivePreview() {
+    const canvas = document.getElementById('watermark-preview-canvas');
+    const state = document.getElementById('watermark-preview-state');
+    if (!canvas) return;
+    const token = ++watermarkPreviewToken;
+    if (state) state.textContent = canApplyWatermark() ? t('watermark_preview_on') : t('watermark_preview_off');
+    try {
+        const sample = await getWatermarkPreviewSample();
+        const result = await composeWatermark(sample, 720, 405);
+        const image = await loadCanvasImage(result.blob);
+        if (token !== watermarkPreviewToken) {
+            releaseCanvasImage(image);
+            return;
+        }
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+        releaseCanvasImage(image);
+    } catch (error) {
+        console.warn('watermark live preview:', error);
+    }
 }
 
 function handleWatermarkControlChange() {
     watermarkSettings = readWatermarkSettingsFromControls();
     saveWatermarkSettings();
     updateWatermarkLabels();
+    renderWatermarkShortcut();
+    renderWatermarkLivePreview();
     scheduleWatermarkRefresh();
 }
 
@@ -3237,6 +3306,11 @@ function installDelegates() {
                 clearAppCache();
                 return;
             }
+            case 'open-watermark-settings': {
+                e.preventDefault(); e.stopPropagation();
+                openWatermarkSettings();
+                return;
+            }
             case 'watermark-pick-image': {
                 e.preventDefault(); e.stopPropagation();
                 document.getElementById('setting-watermark-image-input')?.click();
@@ -3533,6 +3607,18 @@ function switchView(viewId, activeDiv) {
     if (els.dropZone) {
         els.dropZone.style.display = ['chat', 'settings', 'bookmarks', 'feeds', 'discovery'].includes(viewId) ? 'none' : '';
     }
+}
+
+function openWatermarkSettings() {
+    nav.push({ type: 'settings' }, _activeView);
+    updateBackBtn();
+    switchView('settings', els.settingsView);
+    requestAnimationFrame(() => {
+        const panel = document.getElementById('settings-watermark-panel');
+        panel?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        panel?.classList.add('settings-panel-highlight');
+        setTimeout(() => panel?.classList.remove('settings-panel-highlight'), 1200);
+    });
 }
 
 // ─── 翻訳 ─────────────────────────────────────────────────────────
@@ -4463,6 +4549,12 @@ async function initApp() {
         els.videoPickBtn.addEventListener('click', () => els.videoInput?.click());
     }
 
+    const watermarkShortcut = get('watermark-shortcut-btn');
+    if (watermarkShortcut) {
+        watermarkShortcut.innerHTML = `${getIcon('stamp')}<span data-i18n="watermark_feature">${t('watermark_feature')}</span>`;
+        renderWatermarkShortcut();
+    }
+
     if (els.viewTitle && !get('back-btn')) {
         const b = document.createElement('button');
         b.id = 'back-btn'; b.className = 'icon-btn'; b.textContent = '◀';
@@ -4555,6 +4647,10 @@ async function initApp() {
         panel.className = 'settings-panel settings-watermark-panel';
         panel.innerHTML =
             `<div class="settings-panel-title" data-i18n="watermark_title">${t('watermark_title')}</div>` +
+            `<div class="watermark-live-preview">` +
+            `<div class="watermark-preview-heading"><span data-i18n="watermark_preview">${t('watermark_preview')}</span><small id="watermark-preview-state"></small></div>` +
+            `<canvas id="watermark-preview-canvas" width="720" height="405"></canvas>` +
+            `</div>` +
             `<label class="settings-check"><input type="checkbox" id="setting-watermark-enabled"> <span data-i18n="watermark_enabled">${t('watermark_enabled')}</span></label>` +
             `<label class="settings-field"><span data-i18n="watermark_mode">${t('watermark_mode')}</span>` +
             `<select id="setting-watermark-mode">` +

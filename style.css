@@ -183,6 +183,24 @@ body[data-font-size="2"] .msg-bubble { font-size: 20px; }
 #post-btn:disabled { background-color: #cbd5e1; cursor: not-allowed; }
 #video-pick-btn { color: var(--text-sub); width: 32px; height: 32px; padding: 4px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
 #video-pick-btn:hover { color: var(--bsky-blue); background: #e0f2fe; border-radius: 6px; }
+.composer-tool-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    min-height: 32px;
+    padding: 5px 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text-sub);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 800;
+    white-space: nowrap;
+}
+.composer-tool-btn .svg-icon { margin: 0; width: 16px; height: 16px; min-width: 16px; }
+.composer-tool-btn:hover { color: var(--bsky-blue); border-color: var(--bsky-blue); }
+.composer-tool-btn.active { color: var(--bsky-blue); border-color: var(--bsky-blue); background: var(--surface-accent); }
 .image-label { font-size: 24px; cursor: pointer; padding: 5px; flex-shrink: 0; }
 #image-preview-container { display: flex; gap: 10px; margin-top: 10px; padding-left: 45px; }
 .preview-thumb { width: 60px; height: 60px; border-radius: 8px; object-fit: cover; border: 1px solid var(--border-color); cursor: pointer; }
@@ -1085,6 +1103,30 @@ body[data-font-size="2"] .msg-bubble { font-size: 20px; }
     border-radius: 8px;
     object-fit: contain;
     background: #f8fafc;
+}
+.watermark-live-preview {
+    margin-bottom: 14px;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--surface-subtle);
+}
+.watermark-preview-heading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 9px 11px;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 13px;
+    font-weight: 800;
+}
+.watermark-preview-heading small { color: var(--text-sub); font-weight: 600; }
+#watermark-preview-canvas { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; }
+.settings-panel-highlight { animation: settings-panel-highlight 1.2s ease; }
+@keyframes settings-panel-highlight {
+    0%, 100% { box-shadow: none; }
+    25% { box-shadow: 0 0 0 3px rgba(0, 133, 255, .28); }
 }
 @media (max-width: 720px) {
     .settings-field,
