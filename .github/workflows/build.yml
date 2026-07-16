@@ -44,20 +44,26 @@ jobs:
           echo "${{ secrets.APPLE_API_KEY }}" | base64 --decode > ${{ github.workspace }}/AuthKey.p8
           chmod 600 ${{ github.workspace }}/AuthKey.p8
 
-      # ビルドと公証（標準機能）
-      - name: Build App
-        run: npx electron-builder --publish never
+      - name: Build Windows App (unsigned)
+        if: matrix.os == 'windows-latest'
+        run: npx electron-builder --win --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      # Apple証明書で署名し、API Keyで公証する
+      - name: Build macOS App (signed and notarized)
+        if: matrix.os == 'macos-latest'
+        run: npx electron-builder --mac --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          # electron-builderが自動で認識する変数名に戻す
           APPLE_API_KEY: ${{ github.workspace }}/AuthKey.p8
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-          # どこで止まったか完全追跡するためのログ設定
           DEBUG: electron-builder,electron-notarize*
-          CSC_IDENTITY_AUTO_DISCOVERY: ${{ matrix.os == 'macos-latest' && 'true' || 'false' }}
+          CSC_IDENTITY_AUTO_DISCOVERY: "true"
 
       - name: Package FFmpeg Compliance Assets
         if: matrix.os == 'macos-latest'
@@ -81,6 +87,10 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
+          name: Aerune ${{ github.ref_name }}
+          body_path: RELEASE_NOTES.md
+          draft: false
+          prerelease: false
           files: |
             dist/*.exe
             dist/*.dmg

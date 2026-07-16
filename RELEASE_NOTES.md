@@ -1,4 +1,4 @@
-# Aerune Electron リファクタリング / Electron Refactoring
+# Aerune 2.5.8
 
 リリース日 / Release date: 2026-07-16
 
@@ -19,9 +19,10 @@
 - JavaScript構文チェック: 成功
 - `npm run build -- --dir`: macOS arm64向けビルド成功
 
-### 補足
+### 配布形式
 
-- macOS向けローカルビルドは、開発者証明書がないためコード署名を省略しています。
+- Windows版インストーラー（`.exe`）は未署名です。
+- macOS版（`.dmg` / `.zip`）はApple Developer IDで署名し、公証した状態で配布します。
 
 ## English
 
@@ -40,6 +41,7 @@
 - JavaScript syntax checks: passed
 - `npm run build -- --dir`: macOS arm64 build completed successfully
 
-### Notes
+### Distribution
 
-- Code signing was skipped for the local macOS build because no developer certificate was available.
+- The Windows installer (`.exe`) is distributed unsigned.
+- The macOS artifacts (`.dmg` / `.zip`) are signed with an Apple Developer ID and notarized before distribution.
