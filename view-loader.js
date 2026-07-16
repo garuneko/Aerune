@@ -1,6 +1,7 @@
 // view-loader.js (optimized)
 const { hasSelection, downloadImage, linkify, renderRichText, escHTML, escAttr } = require('./utils.js');
 const { createPostElement, renderPosts } = require('./post-renderer.js');
+const { groupNotificationsForDisplay } = require('./display-utils.js');
 
 class ViewLoader {
     constructor(api, getCtx, els, getTimelineSource = () => null) {
@@ -364,23 +365,10 @@ class ViewLoader {
     }
 
     groupNotifications(notifs) {
-        const items = [];
-        const grouped = new Map();
-        for (const n of notifs) {
-            const canGroup = (n.reason === 'like' || n.reason === 'repost') && n.reasonSubject;
-            const key = canGroup ? `${n.reason}:${n.reasonSubject}` : '';
-            if (!key) {
-                items.push({ id: this.notificationId(n), reason: n.reason, target: this.notificationTarget(n), notifications: [n] });
-                continue;
-            }
-            if (!grouped.has(key)) {
-                const item = { id: key, reason: n.reason, target: this.notificationTarget(n), notifications: [] };
-                grouped.set(key, item);
-                items.push(item);
-            }
-            grouped.get(key).notifications.push(n);
-        }
-        return items;
+        return groupNotificationsForDisplay(notifs, n => this.notificationId(n)).map(item => ({
+            ...item,
+            target: this.notificationTarget(item.notifications[0])
+        }));
     }
 
     notificationActorText(notifs, ctx) {

@@ -1,5 +1,6 @@
 // post-renderer.js (v2.0.2: timestamp display, render optimization)
 const { escAttr, escHTML, renderRichText } = require('./utils.js');
+const { threadConnectionFlags } = require('./display-utils.js');
 
 // Stores for event delegation
 const postStore = new Map();
@@ -288,17 +289,11 @@ function renderPosts(posts, container, ctx, isAppend = false) {
     if (!isAppend) clearStores(); // 追記モードでなければクリア
 
     const fragment = document.createDocumentFragment();
-    let prevUri = null;
-    let prevEl = null;
-
-    for (const item of posts) {
+    const connectionFlags = threadConnectionFlags(posts);
+    for (const [index, item] of posts.entries()) {
         const post = item.post || item;
         const el = createPostElement(post, ctx, false, false, item.reason || null);
-        if (item.reply?.parent?.uri === prevUri && prevEl) {
-            prevEl.classList.add('thread-line');
-        }
-        prevUri = post.uri;
-        prevEl = el;
+        if (connectionFlags[index].connectsToNext) el.classList.add('thread-line');
         fragment.appendChild(el);
     }
 
