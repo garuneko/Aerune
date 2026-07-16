@@ -379,6 +379,18 @@ class BskyAPI {
         return await this.agent.getPostThread({ uri, depth: 10, parentHeight: 10 });
     }
 
+    async getLikes(uri, limit = 100, cursor = undefined) {
+        const params = { uri, limit };
+        if (cursor) params.cursor = cursor;
+        return await this._xrpc('app.bsky.feed.getLikes', params);
+    }
+
+    async getRepostedBy(uri, limit = 100, cursor = undefined) {
+        const params = { uri, limit };
+        if (cursor) params.cursor = cursor;
+        return await this._xrpc('app.bsky.feed.getRepostedBy', params);
+    }
+
     // ─── ポスト取得 ───────────────────────────────────────────────
     async getPosts(uris) { return await this.agent.getPosts({ uris }); }
 

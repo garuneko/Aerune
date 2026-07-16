@@ -52,6 +52,8 @@ let watermarkImageBlob = null;
 let watermarkImageUrl = '';
 let watermarkImageName = '';
 let watermarkRenderToken = 0;
+let watermarkPreviewToken = 0;
+let watermarkPreviewSampleBlob = null;
 window.aeruneBookmarks = new Set();
 
 const feedState = {
@@ -1006,12 +1008,79 @@ function renderWatermarkSettings() {
     }
     if (clearButton) clearButton.disabled = !watermarkImageBlob;
     updateWatermarkLabels();
+    renderWatermarkShortcut();
+    renderWatermarkLivePreview();
+}
+
+function renderWatermarkShortcut() {
+    const button = document.getElementById('watermark-shortcut-btn');
+    if (!button) return;
+    const active = canApplyWatermark();
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    button.title = active ? t('watermark_preview_on') : t('watermark_preview_off');
+}
+
+async function getWatermarkPreviewSample() {
+    if (watermarkPreviewSampleBlob) return watermarkPreviewSampleBlob;
+    const canvas = document.createElement('canvas');
+    canvas.width = 720;
+    canvas.height = 405;
+    const ctx = canvas.getContext('2d');
+    const sky = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    sky.addColorStop(0, '#74c7ff');
+    sky.addColorStop(0.62, '#dff4ff');
+    sky.addColorStop(1, '#f7d6a2');
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = 'rgba(255,255,255,.72)';
+    ctx.beginPath();
+    ctx.arc(590, 90, 42, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#5f8f78';
+    ctx.beginPath();
+    ctx.moveTo(0, 330);
+    ctx.quadraticCurveTo(180, 210, 355, 330);
+    ctx.quadraticCurveTo(520, 220, 720, 320);
+    ctx.lineTo(720, 405);
+    ctx.lineTo(0, 405);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#315f52';
+    ctx.fillRect(0, 355, canvas.width, 50);
+    watermarkPreviewSampleBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', .9));
+    return watermarkPreviewSampleBlob;
+}
+
+async function renderWatermarkLivePreview() {
+    const canvas = document.getElementById('watermark-preview-canvas');
+    const state = document.getElementById('watermark-preview-state');
+    if (!canvas) return;
+    const token = ++watermarkPreviewToken;
+    if (state) state.textContent = canApplyWatermark() ? t('watermark_preview_on') : t('watermark_preview_off');
+    try {
+        const sample = await getWatermarkPreviewSample();
+        const result = await composeWatermark(sample, 720, 405);
+        const image = await loadCanvasImage(result.blob);
+        if (token !== watermarkPreviewToken) {
+            releaseCanvasImage(image);
+            return;
+        }
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+        releaseCanvasImage(image);
+    } catch (error) {
+        console.warn('watermark live preview:', error);
+    }
 }
 
 function handleWatermarkControlChange() {
     watermarkSettings = readWatermarkSettingsFromControls();
     saveWatermarkSettings();
     updateWatermarkLabels();
+    renderWatermarkShortcut();
+    renderWatermarkLivePreview();
     scheduleWatermarkRefresh();
 }
 
@@ -2795,6 +2864,10 @@ async function reportAccountFromActor(did) {
 
 function openNotificationTarget(el) {
     if (!el) return;
+    if (el.dataset.detailId) {
+        window.openNotificationDetail(el.dataset.detailId);
+        return;
+    }
     const target = el.dataset.notifTarget;
     const uri = el.dataset.targetUri || el.dataset.thread || '';
     const actor = el.dataset.actor || '';
@@ -2807,7 +2880,25 @@ window.openNotificationDetail = (detailId) => {
     if (!detail) return;
     const reason = detail.reason || 'like';
     const title = t(`notif_detail_${reason}`, String(detail.notifications.length));
-    window.showListModal(title, async () => detail.notifications.map(n => n.author).filter(Boolean), null);
+    window.showListModal(title, async () => {
+        try {
+            if (detail.target?.uri && reason === 'like') {
+                const res = await api.getLikes(detail.target.uri, 100);
+                return (res.data.likes || []).map(item => item.actor || item).filter(Boolean);
+            }
+            if (detail.target?.uri && reason === 'repost') {
+                const res = await api.getRepostedBy(detail.target.uri, 100);
+                return res.data.repostedBy || [];
+            }
+        } catch (error) {
+            console.warn('notification actors:', error);
+        }
+        return detail.notifications.map(n => n.author).filter(Boolean);
+    }, null, {
+        post: detail.post,
+        target: detail.target,
+        sectionTitle: t('notif_reactors')
+    });
 };
 
 function setSearchMode(mode, run = true) {
@@ -3167,6 +3258,13 @@ function installDelegates() {
                 window.openNotificationDetail(actEl.dataset.detailId);
                 return;
             }
+            case 'notification-open-thread': {
+                e.preventDefault(); e.stopPropagation();
+                const modal = document.getElementById('list-modal');
+                if (modal) modal.style.display = 'none';
+                if (actEl.dataset.uri) window.loadThread(actEl.dataset.uri);
+                return;
+            }
             case 'mute-rule-add': {
                 e.preventDefault(); e.stopPropagation();
                 addMuteRuleFromSettings();
@@ -3235,6 +3333,11 @@ function installDelegates() {
             case 'settings-clear-cache': {
                 e.preventDefault(); e.stopPropagation();
                 clearAppCache();
+                return;
+            }
+            case 'open-watermark-settings': {
+                e.preventDefault(); e.stopPropagation();
+                openWatermarkSettings();
                 return;
             }
             case 'watermark-pick-image': {
@@ -3533,6 +3636,18 @@ function switchView(viewId, activeDiv) {
     if (els.dropZone) {
         els.dropZone.style.display = ['chat', 'settings', 'bookmarks', 'feeds', 'discovery'].includes(viewId) ? 'none' : '';
     }
+}
+
+function openWatermarkSettings() {
+    nav.push({ type: 'settings' }, _activeView);
+    updateBackBtn();
+    switchView('settings', els.settingsView);
+    requestAnimationFrame(() => {
+        const panel = document.getElementById('settings-watermark-panel');
+        panel?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        panel?.classList.add('settings-panel-highlight');
+        setTimeout(() => panel?.classList.remove('settings-panel-highlight'), 1200);
+    });
 }
 
 // ─── 翻訳 ─────────────────────────────────────────────────────────
@@ -4005,19 +4120,20 @@ async function checkNotifs() {
 }
 
 // ─── ミュート/ブロックモーダル ────────────────────────────────────
-window.showListModal = (title, fetcher, type) => {
+window.showListModal = (title, fetcher, type, options = {}) => {
     let modal = document.getElementById('list-modal');
     if (!modal) {
         modal = document.createElement('div');
         modal.id = 'list-modal';
-        modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center;';
+        modal.className = 'list-modal';
         modal.innerHTML =
-            `<div style="background:white;width:400px;max-width:90%;max-height:80%;border-radius:12px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,.2);">` +
-            `<div style="padding:15px 20px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center;font-weight:bold;font-size:1.1em;">` +
-            `<span id="list-modal-title"></span><span style="cursor:pointer;color:gray;font-size:1.2em;" onclick="document.getElementById('list-modal').style.display='none'">✖</span></div>` +
-            `<div id="list-modal-body" style="padding:15px;overflow-y:auto;flex:1;"></div></div>`;
+            `<div class="list-modal-content">` +
+            `<div class="list-modal-header">` +
+            `<span id="list-modal-title"></span><button type="button" id="list-modal-close" aria-label="${escAttr(t('cancel'))}">✖</button></div>` +
+            `<div id="list-modal-body"></div></div>`;
         document.body.appendChild(modal);
         modal.addEventListener('click', e => { if (e.target.id === 'list-modal') modal.style.display = 'none'; });
+        modal.querySelector('#list-modal-close').onclick = () => { modal.style.display = 'none'; };
     }
     document.getElementById('list-modal-title').textContent = title;
     const body = document.getElementById('list-modal-body');
@@ -4025,14 +4141,33 @@ window.showListModal = (title, fetcher, type) => {
     modal.style.display = 'flex';
 
     fetcher().then(users => {
-        if (!users?.length) {
-            body.innerHTML = `<div style="text-align:center;color:gray;padding:20px;">${escHTML(t('list_empty'))}</div>`;
-            return;
-        }
         const frag = document.createDocumentFragment();
-        for (const user of users) {
+        if (options.post) {
+            const post = createPostElement(options.post, getRenderContext(), false, true);
+            post.classList.add('notification-detail-post');
+            frag.appendChild(post);
+            if (options.target?.uri) {
+                const controls = document.createElement('div');
+                controls.className = 'notification-detail-actions';
+                controls.innerHTML = `<button type="button" data-act="notification-open-thread" data-uri="${escAttr(options.target.uri)}">${escHTML(t('notif_open_thread'))}</button>`;
+                frag.appendChild(controls);
+            }
+        }
+        if (options.sectionTitle) {
+            const heading = document.createElement('div');
+            heading.className = 'list-modal-section-title';
+            heading.textContent = options.sectionTitle;
+            frag.appendChild(heading);
+        }
+        if (!users?.length) {
+            const empty = document.createElement('div');
+            empty.className = 'list-modal-empty';
+            empty.textContent = t('list_empty');
+            frag.appendChild(empty);
+        }
+        for (const user of users || []) {
             const d = document.createElement('div');
-            d.style.cssText = 'display:flex;align-items:center;padding:10px 0;border-bottom:1px solid #f0f0f0;';
+            d.className = 'list-modal-user';
             const actionLabel = type === 'Block' ? t('ctx_unblock') : t('ctx_unmute');
             const action = type
                 ? `<button class="action-btn" data-act="unmod" data-type="${escAttr(type)}" data-did="${escAttr(user.did)}" style="color:#d93025;border:1px solid #d93025;border-radius:15px;padding:4px 12px;font-weight:bold;opacity:1;">${escHTML(actionLabel)}</button>`
@@ -4463,6 +4598,12 @@ async function initApp() {
         els.videoPickBtn.addEventListener('click', () => els.videoInput?.click());
     }
 
+    const watermarkShortcut = get('watermark-shortcut-btn');
+    if (watermarkShortcut) {
+        watermarkShortcut.innerHTML = `${getIcon('stamp')}<span data-i18n="watermark_feature">${t('watermark_feature')}</span>`;
+        renderWatermarkShortcut();
+    }
+
     if (els.viewTitle && !get('back-btn')) {
         const b = document.createElement('button');
         b.id = 'back-btn'; b.className = 'icon-btn'; b.textContent = '◀';
@@ -4555,6 +4696,10 @@ async function initApp() {
         panel.className = 'settings-panel settings-watermark-panel';
         panel.innerHTML =
             `<div class="settings-panel-title" data-i18n="watermark_title">${t('watermark_title')}</div>` +
+            `<div class="watermark-live-preview">` +
+            `<div class="watermark-preview-heading"><span data-i18n="watermark_preview">${t('watermark_preview')}</span><small id="watermark-preview-state"></small></div>` +
+            `<canvas id="watermark-preview-canvas" width="720" height="405"></canvas>` +
+            `</div>` +
             `<label class="settings-check"><input type="checkbox" id="setting-watermark-enabled"> <span data-i18n="watermark_enabled">${t('watermark_enabled')}</span></label>` +
             `<label class="settings-field"><span data-i18n="watermark_mode">${t('watermark_mode')}</span>` +
             `<select id="setting-watermark-mode">` +

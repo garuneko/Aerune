@@ -6,10 +6,10 @@
     <link rel="stylesheet" href="style.css">
     <style>
         /* 追加されたUI用のCSSスタイル */
-        .ctx-menu { position: fixed; background: white; border: 1px solid #ddd; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border-radius: 8px; z-index: 10000; padding: 6px 0; min-width: 180px; font-size: 0.9em; }
-        .ctx-menu-item { padding: 10px 16px; cursor: pointer; color: #333; display: flex; align-items: center; gap: 8px; }
-        .ctx-menu-item:hover { background: #f0f4f8; }
-        .ctx-divider { height: 1px; background: #eee; margin: 6px 0; }
+        .ctx-menu { position: fixed; background: var(--surface-elevated); border: 1px solid var(--border-color); box-shadow: 0 4px 12px var(--shadow-color); border-radius: 8px; z-index: 10000; padding: 6px 0; min-width: 180px; font-size: 0.9em; }
+        .ctx-menu-item { padding: 10px 16px; cursor: pointer; color: var(--text-main); display: flex; align-items: center; gap: 8px; }
+        .ctx-menu-item:hover { background: var(--surface-hover); }
+        .ctx-divider { height: 1px; background: var(--border-color); margin: 6px 0; }
         .img-preview-wrap { display: inline-block; position: relative; margin-right: 12px; margin-bottom: 12px; vertical-align: top; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         .img-preview-wrap img { max-height: 120px; display: block; }
         .img-controls { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.7); padding: 4px; display: flex; gap: 4px; }
@@ -128,6 +128,7 @@
             <div class="post-form-container" id="drop-zone">
                 <div id="quote-preview" class="quote-preview hidden"></div>
                 <div class="post-form-inner">
+                    <button id="watermark-shortcut-btn" class="composer-tool-btn" type="button" data-act="open-watermark-settings" aria-pressed="false"><span data-i18n="watermark_feature">透かし</span></button>
                     <label for="image-input" class="image-label" style="cursor:pointer;"><img src="image.svg" alt="image" style="width: 24px; height: 24px; vertical-align: middle;"></label>
                     <input type="file" id="image-input" accept="image/*" multiple style="display:none;">
                     <button id="video-pick-btn" class="icon-btn" type="button" title="Video"></button>

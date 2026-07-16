@@ -1,6 +1,7 @@
 // view-loader.js (optimized)
 const { hasSelection, downloadImage, linkify, renderRichText, escHTML, escAttr } = require('./utils.js');
 const { createPostElement, renderPosts } = require('./post-renderer.js');
+const { canonicalReactionReason, groupNotificationsForDisplay, threadConnectionFlags } = require('./display-utils.js');
 
 class ViewLoader {
     constructor(api, getCtx, els, getTimelineSource = () => null) {
@@ -357,30 +358,17 @@ class ViewLoader {
 
     notificationTarget(n) {
         if (n.reason === 'follow') return { type: 'profile', actor: n.author?.did || n.author?.handle || '' };
-        const uri = (n.reason === 'like' || n.reason === 'repost')
+        const uri = canonicalReactionReason(n.reason)
             ? n.reasonSubject
             : (n.uri || n.reasonSubject);
         return uri ? { type: 'thread', uri } : { type: 'profile', actor: n.author?.did || n.author?.handle || '' };
     }
 
     groupNotifications(notifs) {
-        const items = [];
-        const grouped = new Map();
-        for (const n of notifs) {
-            const canGroup = (n.reason === 'like' || n.reason === 'repost') && n.reasonSubject;
-            const key = canGroup ? `${n.reason}:${n.reasonSubject}` : '';
-            if (!key) {
-                items.push({ id: this.notificationId(n), reason: n.reason, target: this.notificationTarget(n), notifications: [n] });
-                continue;
-            }
-            if (!grouped.has(key)) {
-                const item = { id: key, reason: n.reason, target: this.notificationTarget(n), notifications: [] };
-                grouped.set(key, item);
-                items.push(item);
-            }
-            grouped.get(key).notifications.push(n);
-        }
-        return items;
+        return groupNotificationsForDisplay(notifs, n => this.notificationId(n)).map(item => ({
+            ...item,
+            target: this.notificationTarget(item.notifications[0])
+        }));
     }
 
     notificationActorText(notifs, ctx) {
@@ -399,10 +387,11 @@ class ViewLoader {
     renderNotificationItem(item, postMap, ctx) {
         const n = item.notifications[0];
         const target = item.target || this.notificationTarget(n);
+        const reactionReason = canonicalReactionReason(item.reason || n.reason);
         const div = document.createElement('div');
         const isUnread = item.notifications.some(x => !x.isRead);
         const isGroup = item.notifications.length > 1;
-        const detailId = isGroup ? item.id : '';
+        const detailId = reactionReason ? item.id : '';
         div.className = `post notif${isUnread ? ' notif-unread' : ''}${isGroup ? ' notif-group' : ''}`;
         div.dataset.notif = '1';
         div.dataset.reason = item.reason || n.reason || '';
@@ -422,11 +411,11 @@ class ViewLoader {
                 reason: item.reason,
                 target,
                 notifications: item.notifications,
-                summary: postMap[n.reasonSubject] || ''
+                post: postMap[n.reasonSubject] || null
             });
         }
 
-        const previewText = (n.reason === 'like' || n.reason === 'repost') ? postMap[n.reasonSubject] : n.record?.text;
+        const previewText = reactionReason ? postMap[n.reasonSubject]?.record?.text : n.record?.text;
         const preview = previewText ? `<div class="notif-preview">${linkify(previewText)}</div>` : '';
         const avatars = item.notifications.slice(0, 3).map(x =>
             `<img src="${escAttr(x.author?.avatar||'')}" class="notif-avatar" loading="lazy" decoding="async">`
@@ -436,7 +425,7 @@ class ViewLoader {
         const reasonText = isGroup
             ? ctx.t(reasonKey, actorText, String(item.notifications.length))
             : ctx.t(reasonKey);
-        const detail = isGroup
+        const detail = reactionReason
             ? `<button type="button" class="notif-detail-btn" data-act="notification-detail" data-detail-id="${escAttr(detailId)}">${ctx.t('notif_view_reactions')}</button>`
             : '';
 
@@ -472,7 +461,7 @@ class ViewLoader {
 
             const existing = new Set(this.notificationItems.map(n => this.notificationId(n)));
             const visibleNotifs = notifs.filter(n => {
-                if (n.reason === 'like' || n.reason === 'repost' || !n.record?.text) return true;
+                if (canonicalReactionReason(n.reason) || !n.record?.text) return true;
                 return !ctx.shouldMutePost?.({ record: n.record, author: n.author, uri: n.uri });
             });
             const fresh = isAppend ? visibleNotifs.filter(n => !existing.has(this.notificationId(n))) : visibleNotifs;
@@ -480,14 +469,14 @@ class ViewLoader {
             ctx.rememberNotificationIds?.(this.notificationItems.map(n => this.notificationId(n)).filter(Boolean));
 
             const uris = [...new Set(this.notificationItems
-                .filter(n => (n.reason === 'like' || n.reason === 'repost') && n.reasonSubject)
+                .filter(n => canonicalReactionReason(n.reason) && n.reasonSubject)
                 .map(n => n.reasonSubject))];
             const postMap = {};
             if (uris.length) {
                 const chunks = [];
                 for (let i = 0; i < uris.length; i += 25) chunks.push(uris.slice(i, i + 25));
                 const results = await Promise.all(chunks.map(c => this.api.getPosts(c).catch(() => ({ data: { posts: [] } }))));
-                results.forEach(r => r.data.posts.forEach(p => { postMap[p.uri] = p.record?.text || ''; }));
+                results.forEach(r => r.data.posts.forEach(p => { postMap[p.uri] = p; }));
             }
 
             const fragment = document.createDocumentFragment();
@@ -574,19 +563,31 @@ class ViewLoader {
         try {
             const res = await this.api.getPostThread(uri);
             const fragment = document.createDocumentFragment();
-            const walk = (item, isRoot = false) => {
-                if (item.parent) walk(item.parent);
-                if (item.post) fragment.appendChild(createPostElement(item.post, ctx, isRoot));
-                if (item.replies) {
-                    for (const r of item.replies) {
-                        if (!r.post) continue;
-                        const el = createPostElement(r.post, ctx);
-                        el.style.cssText = 'margin-left:40px;border-left:2px solid #eee;';
-                        fragment.appendChild(el);
-                    }
+            const thread = res.data.thread;
+            const ancestors = [];
+            for (let parent = thread?.parent; parent; parent = parent.parent) {
+                if (parent.post) ancestors.unshift(parent.post);
+            }
+            const trunk = [...ancestors, thread?.post].filter(Boolean);
+            const trunkFlags = threadConnectionFlags(trunk.map(post => ({ post, reply: post.record?.reply })));
+            trunk.forEach((post, index) => {
+                const el = createPostElement(post, ctx, post.uri === thread?.post?.uri);
+                if (trunkFlags[index].connectsToPrevious) el.classList.add('thread-line', 'thread-connect-previous');
+                if (trunkFlags[index].connectsToNext) el.classList.add('thread-line', 'thread-connect-next');
+                fragment.appendChild(el);
+            });
+
+            const appendReplies = (replies, depth = 1) => {
+                for (const reply of Array.isArray(replies) ? replies : []) {
+                    if (!reply?.post) continue;
+                    const el = createPostElement(reply.post, ctx);
+                    el.classList.add('thread-detail-reply');
+                    el.style.setProperty('--thread-depth', String(Math.min(depth, 4)));
+                    fragment.appendChild(el);
+                    appendReplies(reply.replies, depth + 1);
                 }
             };
-            walk(res.data.thread, true);
+            appendReplies(thread?.replies);
             requestAnimationFrame(() => { container.textContent = ''; container.appendChild(fragment); });
         } catch { container.innerHTML = '<div style="padding:20px;">Failed to load thread.</div>'; }
     }
