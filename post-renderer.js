@@ -256,7 +256,7 @@ function createPostElement(post, ctx, isThreadRoot = false, isQuoteModal = false
     div.dataset.handle   = au.handle || '';
     div.dataset.did      = au.did    || '';
     div.dataset.noThread = isQuoteModal ? '1' : '0';
-    if (isThreadRoot) div.style.borderLeft = '4px solid var(--bsky-blue)';
+    if (isThreadRoot) div.classList.add('thread-root');
 
     // post-header に日時を右寄せで差し込む（flexboxで左にユーザー名、右に時刻）
     div.innerHTML =
@@ -293,7 +293,8 @@ function renderPosts(posts, container, ctx, isAppend = false) {
     for (const [index, item] of posts.entries()) {
         const post = item.post || item;
         const el = createPostElement(post, ctx, false, false, item.reason || null);
-        if (connectionFlags[index].connectsToNext) el.classList.add('thread-line');
+        if (connectionFlags[index].connectsToPrevious) el.classList.add('thread-line', 'thread-connect-previous');
+        if (connectionFlags[index].connectsToNext) el.classList.add('thread-line', 'thread-connect-next');
         fragment.appendChild(el);
     }
 

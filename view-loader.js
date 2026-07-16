@@ -1,7 +1,7 @@
 // view-loader.js (optimized)
 const { hasSelection, downloadImage, linkify, renderRichText, escHTML, escAttr } = require('./utils.js');
 const { createPostElement, renderPosts } = require('./post-renderer.js');
-const { canonicalReactionReason, groupNotificationsForDisplay } = require('./display-utils.js');
+const { canonicalReactionReason, groupNotificationsForDisplay, threadConnectionFlags } = require('./display-utils.js');
 
 class ViewLoader {
     constructor(api, getCtx, els, getTimelineSource = () => null) {
@@ -563,19 +563,31 @@ class ViewLoader {
         try {
             const res = await this.api.getPostThread(uri);
             const fragment = document.createDocumentFragment();
-            const walk = (item, isRoot = false) => {
-                if (item.parent) walk(item.parent);
-                if (item.post) fragment.appendChild(createPostElement(item.post, ctx, isRoot));
-                if (item.replies) {
-                    for (const r of item.replies) {
-                        if (!r.post) continue;
-                        const el = createPostElement(r.post, ctx);
-                        el.style.cssText = 'margin-left:40px;border-left:2px solid #eee;';
-                        fragment.appendChild(el);
-                    }
+            const thread = res.data.thread;
+            const ancestors = [];
+            for (let parent = thread?.parent; parent; parent = parent.parent) {
+                if (parent.post) ancestors.unshift(parent.post);
+            }
+            const trunk = [...ancestors, thread?.post].filter(Boolean);
+            const trunkFlags = threadConnectionFlags(trunk.map(post => ({ post, reply: post.record?.reply })));
+            trunk.forEach((post, index) => {
+                const el = createPostElement(post, ctx, post.uri === thread?.post?.uri);
+                if (trunkFlags[index].connectsToPrevious) el.classList.add('thread-line', 'thread-connect-previous');
+                if (trunkFlags[index].connectsToNext) el.classList.add('thread-line', 'thread-connect-next');
+                fragment.appendChild(el);
+            });
+
+            const appendReplies = (replies, depth = 1) => {
+                for (const reply of Array.isArray(replies) ? replies : []) {
+                    if (!reply?.post) continue;
+                    const el = createPostElement(reply.post, ctx);
+                    el.classList.add('thread-detail-reply');
+                    el.style.setProperty('--thread-depth', String(Math.min(depth, 4)));
+                    fragment.appendChild(el);
+                    appendReplies(reply.replies, depth + 1);
                 }
             };
-            walk(res.data.thread, true);
+            appendReplies(thread?.replies);
             requestAnimationFrame(() => { container.textContent = ''; container.appendChild(fragment); });
         } catch { container.innerHTML = '<div style="padding:20px;">Failed to load thread.</div>'; }
     }
