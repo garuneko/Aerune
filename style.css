@@ -950,6 +950,53 @@ body[data-font-size="2"] .msg-bubble { font-size: 20px; }
 #app-toast strong { display: block; margin-bottom: 3px; }
 #app-toast span { display: block; color: var(--text-sub); font-size: 13px; }
 
+.list-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 100000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, .55);
+}
+.list-modal-content {
+    width: min(560px, 92vw);
+    max-height: 84vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    background: var(--surface-elevated);
+    color: var(--text-main);
+    box-shadow: 0 18px 48px var(--shadow-color);
+}
+.list-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 1.05em;
+    font-weight: 800;
+}
+.list-modal-header button { border: none; background: transparent; color: var(--text-sub); cursor: pointer; }
+#list-modal-body { padding: 0 14px 14px; overflow-y: auto; }
+.notification-detail-post { margin: 0 -14px; cursor: default; background: var(--surface-subtle); }
+.notification-detail-actions { display: flex; justify-content: flex-end; padding: 10px 0; }
+.notification-detail-actions button {
+    border: 1px solid var(--bsky-blue);
+    border-radius: 999px;
+    padding: 7px 12px;
+    background: var(--surface);
+    color: var(--bsky-blue);
+    cursor: pointer;
+    font-weight: 800;
+}
+.list-modal-section-title { padding: 10px 0 5px; color: var(--text-sub); font-size: 12px; font-weight: 800; }
+.list-modal-user { display: flex; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border-color); }
+.list-modal-empty { padding: 20px 0; text-align: center; color: var(--text-sub); }
+
 /* モデレーション設定 */
 .moderation-panel {
     max-width: 760px;

@@ -2864,6 +2864,10 @@ async function reportAccountFromActor(did) {
 
 function openNotificationTarget(el) {
     if (!el) return;
+    if (el.dataset.detailId) {
+        window.openNotificationDetail(el.dataset.detailId);
+        return;
+    }
     const target = el.dataset.notifTarget;
     const uri = el.dataset.targetUri || el.dataset.thread || '';
     const actor = el.dataset.actor || '';
@@ -2876,7 +2880,25 @@ window.openNotificationDetail = (detailId) => {
     if (!detail) return;
     const reason = detail.reason || 'like';
     const title = t(`notif_detail_${reason}`, String(detail.notifications.length));
-    window.showListModal(title, async () => detail.notifications.map(n => n.author).filter(Boolean), null);
+    window.showListModal(title, async () => {
+        try {
+            if (detail.target?.uri && reason === 'like') {
+                const res = await api.getLikes(detail.target.uri, 100);
+                return (res.data.likes || []).map(item => item.actor || item).filter(Boolean);
+            }
+            if (detail.target?.uri && reason === 'repost') {
+                const res = await api.getRepostedBy(detail.target.uri, 100);
+                return res.data.repostedBy || [];
+            }
+        } catch (error) {
+            console.warn('notification actors:', error);
+        }
+        return detail.notifications.map(n => n.author).filter(Boolean);
+    }, null, {
+        post: detail.post,
+        target: detail.target,
+        sectionTitle: t('notif_reactors')
+    });
 };
 
 function setSearchMode(mode, run = true) {
@@ -3234,6 +3256,13 @@ function installDelegates() {
             case 'notification-detail': {
                 e.preventDefault(); e.stopPropagation();
                 window.openNotificationDetail(actEl.dataset.detailId);
+                return;
+            }
+            case 'notification-open-thread': {
+                e.preventDefault(); e.stopPropagation();
+                const modal = document.getElementById('list-modal');
+                if (modal) modal.style.display = 'none';
+                if (actEl.dataset.uri) window.loadThread(actEl.dataset.uri);
                 return;
             }
             case 'mute-rule-add': {
@@ -4091,19 +4120,20 @@ async function checkNotifs() {
 }
 
 // ─── ミュート/ブロックモーダル ────────────────────────────────────
-window.showListModal = (title, fetcher, type) => {
+window.showListModal = (title, fetcher, type, options = {}) => {
     let modal = document.getElementById('list-modal');
     if (!modal) {
         modal = document.createElement('div');
         modal.id = 'list-modal';
-        modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center;';
+        modal.className = 'list-modal';
         modal.innerHTML =
-            `<div style="background:white;width:400px;max-width:90%;max-height:80%;border-radius:12px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,.2);">` +
-            `<div style="padding:15px 20px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center;font-weight:bold;font-size:1.1em;">` +
-            `<span id="list-modal-title"></span><span style="cursor:pointer;color:gray;font-size:1.2em;" onclick="document.getElementById('list-modal').style.display='none'">✖</span></div>` +
-            `<div id="list-modal-body" style="padding:15px;overflow-y:auto;flex:1;"></div></div>`;
+            `<div class="list-modal-content">` +
+            `<div class="list-modal-header">` +
+            `<span id="list-modal-title"></span><button type="button" id="list-modal-close" aria-label="${escAttr(t('cancel'))}">✖</button></div>` +
+            `<div id="list-modal-body"></div></div>`;
         document.body.appendChild(modal);
         modal.addEventListener('click', e => { if (e.target.id === 'list-modal') modal.style.display = 'none'; });
+        modal.querySelector('#list-modal-close').onclick = () => { modal.style.display = 'none'; };
     }
     document.getElementById('list-modal-title').textContent = title;
     const body = document.getElementById('list-modal-body');
@@ -4111,14 +4141,33 @@ window.showListModal = (title, fetcher, type) => {
     modal.style.display = 'flex';
 
     fetcher().then(users => {
-        if (!users?.length) {
-            body.innerHTML = `<div style="text-align:center;color:gray;padding:20px;">${escHTML(t('list_empty'))}</div>`;
-            return;
-        }
         const frag = document.createDocumentFragment();
-        for (const user of users) {
+        if (options.post) {
+            const post = createPostElement(options.post, getRenderContext(), false, true);
+            post.classList.add('notification-detail-post');
+            frag.appendChild(post);
+            if (options.target?.uri) {
+                const controls = document.createElement('div');
+                controls.className = 'notification-detail-actions';
+                controls.innerHTML = `<button type="button" data-act="notification-open-thread" data-uri="${escAttr(options.target.uri)}">${escHTML(t('notif_open_thread'))}</button>`;
+                frag.appendChild(controls);
+            }
+        }
+        if (options.sectionTitle) {
+            const heading = document.createElement('div');
+            heading.className = 'list-modal-section-title';
+            heading.textContent = options.sectionTitle;
+            frag.appendChild(heading);
+        }
+        if (!users?.length) {
+            const empty = document.createElement('div');
+            empty.className = 'list-modal-empty';
+            empty.textContent = t('list_empty');
+            frag.appendChild(empty);
+        }
+        for (const user of users || []) {
             const d = document.createElement('div');
-            d.style.cssText = 'display:flex;align-items:center;padding:10px 0;border-bottom:1px solid #f0f0f0;';
+            d.className = 'list-modal-user';
             const actionLabel = type === 'Block' ? t('ctx_unblock') : t('ctx_unmute');
             const action = type
                 ? `<button class="action-btn" data-act="unmod" data-type="${escAttr(type)}" data-did="${escAttr(user.did)}" style="color:#d93025;border:1px solid #d93025;border-radius:15px;padding:4px 12px;font-weight:bold;opacity:1;">${escHTML(actionLabel)}</button>`
