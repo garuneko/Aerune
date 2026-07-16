@@ -1,10 +1,48 @@
 :root {
+    color-scheme: light;
     --bsky-blue: #0085ff;
     --border-color: #e5e7eb;
     --bg-color: #ffffff;
+    --surface: #ffffff;
+    --surface-elevated: #ffffff;
+    --surface-muted: #f1f5f9;
+    --surface-subtle: #f8fafc;
+    --surface-accent: #e0f2fe;
+    --surface-hover: #f8fafc;
+    --header-bg: rgba(255, 255, 255, 0.88);
+    --composer-bg: rgba(255, 255, 255, 0.94);
+    --login-overlay: rgba(255, 255, 255, 0.95);
     --text-main: #0b0f14;
     --text-sub: #64748b;
+    --text-on-accent: #ffffff;
+    --danger: #d93025;
+    --success: #15803d;
+    --shadow-color: rgba(15, 23, 42, 0.18);
     --aerune-font-offset: 0px;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        color-scheme: dark;
+        --bsky-blue: #4aa8ff;
+        --border-color: #2a3949;
+        --bg-color: #0b1118;
+        --surface: #101820;
+        --surface-elevated: #17222d;
+        --surface-muted: #1b2936;
+        --surface-subtle: #121d27;
+        --surface-accent: #12304a;
+        --surface-hover: #172430;
+        --header-bg: rgba(11, 17, 24, 0.88);
+        --composer-bg: rgba(11, 17, 24, 0.95);
+        --login-overlay: rgba(11, 17, 24, 0.96);
+        --text-main: #edf5fc;
+        --text-sub: #9fb0c0;
+        --text-on-accent: #ffffff;
+        --danger: #ff8278;
+        --success: #66d995;
+        --shadow-color: rgba(0, 0, 0, 0.48);
+    }
 }
 
 *, *::before, *::after {
@@ -58,14 +96,14 @@ body.rtl .svg-icon { margin-right: 0; margin-left: 4px; }
 /* メインコンテンツ */
 .content { flex: 1; overflow-y: auto; overflow-x: hidden; position: relative; min-width: 0; display: flex; flex-direction: column; }
 .content-header {
-    position: sticky; top: 0; background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(10px);
+    position: sticky; top: 0; background: var(--header-bg); backdrop-filter: blur(10px);
     padding: 15px 20px; border-bottom: 1px solid var(--border-color);
     display: flex; justify-content: space-between; align-items: center; z-index: 10;
 }
 
 /* ポスト共通 */
 .post { display: flex; padding: 15px 20px; border-bottom: 1px solid var(--border-color); transition: background 0.2s; cursor: pointer; }
-.post:hover { background-color: #f8fafc; }
+.post:hover { background-color: var(--surface-hover); }
 .post-avatar { width: 48px; height: 48px; border-radius: 50%; margin-right: 12px; background-color: #eee; cursor: pointer; flex-shrink: 0; }
 .post-content { flex: 1; min-width: 0; }
 .post-author { font-weight: bold; margin-right: 5px; cursor: pointer; }
@@ -135,7 +173,7 @@ body[data-font-size="2"] .msg-bubble { font-size: 20px; }
 
 /* 投稿フォーム */
 .post-form-container {
-    position: sticky; bottom: 0; background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px);
+    position: sticky; bottom: 0; background: var(--composer-bg); backdrop-filter: blur(10px);
     border-top: 1px solid var(--border-color); padding: 15px 20px; z-index: 10; margin-top: auto;
 }
 .post-form-inner { display: flex; gap: 10px; align-items: center; width: 100%; }
@@ -269,12 +307,12 @@ body[data-font-size="2"] .msg-bubble { font-size: 20px; }
 /* ログイン画面 */
 #login-form:not(.hidden) {
     display: flex !important; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-    background-color: rgba(255, 255, 255, 0.95); backdrop-filter: blur(5px);
+    background-color: var(--login-overlay); backdrop-filter: blur(5px);
     z-index: 99999; justify-content: center; align-items: center;
 }
 .login-box {
     display: flex; flex-direction: column; width: 320px; gap: 15px; padding: 40px;
-    background: white; border: 1px solid var(--border-color); border-radius: 20px;
+    background: var(--surface-elevated); border: 1px solid var(--border-color); border-radius: 20px;
     box-shadow: 0 10px 30px rgba(0,0,0,0.1);
 }
 .login-box input { padding: 12px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 14px; }
@@ -1378,4 +1416,118 @@ body.rtl .settings-panel,
 body.rtl .moderation-panel,
 body.rtl .about-box {
     text-align: right;
+}
+
+/* システムテーマ追従: 動的生成UIを含む共通サーフェス */
+.sidebar,
+.content,
+.chat-container,
+.chat-header,
+.chat-main,
+.chat-messages,
+#settings-view,
+#feeds-view,
+#discovery-view,
+#notifications,
+#profile-view,
+#thread-view,
+#search-view,
+#bookmarks-view {
+    background-color: var(--bg-color);
+    color: var(--text-main);
+}
+
+input,
+textarea,
+select,
+button {
+    font: inherit;
+}
+
+input,
+textarea,
+select {
+    background-color: var(--surface);
+    color: var(--text-main);
+    border-color: var(--border-color);
+}
+
+input::placeholder,
+textarea::placeholder { color: var(--text-sub); opacity: .85; }
+
+.actor-actions button,
+.profile-stat-link,
+.chat-status button,
+.chat-load-more,
+.chat-load-older,
+.feed-source-select,
+.feed-chip,
+.feed-manager-btn,
+.feed-search-bar button,
+.feed-row button,
+.feeds-header button,
+.discovery-header button,
+.discovery-actions button,
+.notif-detail-btn,
+.notif-load-more,
+.report-actions button,
+.moderation-panel button,
+.settings-panel button,
+.settings-account-actions button,
+.settings-cache-panel button,
+.html-modal button {
+    background-color: var(--surface);
+    border-color: var(--border-color);
+    color: var(--text-main);
+}
+
+.settings-panel,
+.moderation-panel,
+.discovery-card,
+.modal-content,
+.html-modal-content,
+#app-toast,
+.video-preview-wrap {
+    background-color: var(--surface-elevated);
+    color: var(--text-main);
+}
+
+.embedded-quote,
+.external-card,
+.discovery-preview,
+.notif-preview,
+.msg-theirs,
+.relationship-badge {
+    background-color: var(--surface-muted);
+    color: var(--text-main);
+}
+
+.embedded-quote:hover,
+.external-card:hover { background-color: var(--surface-hover); }
+.convo-item.active,
+.settings-account-row.active,
+.quote-preview { background-color: var(--surface-accent); }
+.notif-unread { background-color: var(--surface-subtle); }
+.notif-avatar { border-color: var(--surface-elevated); }
+.post-img-thumb { background-color: var(--surface-subtle); }
+.content-header,
+.feed-source-bar,
+.timeline-notice { background: var(--header-bg); }
+.danger-action,
+.search-error,
+.chat-error,
+.feed-error,
+.discovery-error,
+.notif-error { color: var(--danger) !important; }
+#login-cancel-btn { background: var(--surface-muted) !important; color: var(--text-main) !important; }
+.login-box { box-shadow: 0 10px 30px var(--shadow-color); }
+
+@media (prefers-color-scheme: dark) {
+    .nav-links li:hover,
+    .account-item:hover,
+    .sidebar-action-btn:hover,
+    .action-btn:hover,
+    #video-pick-btn:hover { background-color: var(--surface-hover); }
+    .profile-avatar-large { border-color: var(--bg-color); }
+    #moderation-list-container { background: var(--surface-muted) !important; }
 }
